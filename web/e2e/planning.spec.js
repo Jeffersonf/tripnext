@@ -181,3 +181,31 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
   await expect(page.getByText("Ana")).toBeVisible();
   await expect(page.getByText("Bia")).toBeVisible();
 });
+
+test("cria conta, sincroniza e recupera a viagem sem o armazenamento local", async ({
+  page,
+}) => {
+  const email = `traveler-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+  await page.getByRole("button", { name: "Começar a planejar" }).click();
+  await page.getByLabel("Nome do plano").fill("Viagem sincronizada");
+  await page.getByLabel("Para onde você vai?").fill("Salvador");
+  await page.getByLabel("Data de ida").fill("2027-06-01");
+  await page.getByLabel("Data de volta").fill("2027-06-04");
+  await page.getByRole("button", { name: "Criar meu planejamento" }).click();
+  await page.getByRole("button", { name: "Ajustes" }).click();
+  await page.getByRole("button", { name: "Entrar ou criar conta" }).click();
+  await page.getByRole("button", { name: "Ainda não tenho conta" }).click();
+  await page.getByLabel("Seu nome").fill("Viajante E2E");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha").fill("senha-segura-123");
+  await page.getByRole("button", { name: "Criar conta e entrar" }).click();
+  await expect(page.getByText(/Conectado como Viajante E2E/)).toBeVisible();
+  await page.getByRole("button", { name: "Sincronizar agora" }).click();
+  await expect(page.getByText(/enviada\(s\)/)).toBeVisible();
+  await page.evaluate(() => localStorage.removeItem("tripnext-store"));
+  await page.reload();
+  await page.getByRole("button", { name: "Buscar minhas viagens" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Viagem sincronizada" }),
+  ).toBeVisible();
+});

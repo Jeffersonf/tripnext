@@ -173,15 +173,36 @@ export function migrateStoredData(
       )
         ? saved.activeTripId
         : trips.find((t) => !t.archived)?.id || null;
-      return { version: 5, trips, activeTripId: active };
+      return {
+        version: 6,
+        trips,
+        activeTripId: active,
+        syncQueue: saved.syncQueue || [],
+        syncVersions: saved.syncVersions || {},
+        syncCursor: Number(saved.syncCursor || 0),
+      };
     }
     const legacy = legacyText ? JSON.parse(legacyText) : null;
     if (legacy) {
       const trip = normalizeTrip(legacy, idFactory, now);
-      return { version: 5, trips: [trip], activeTripId: trip.id };
+      return {
+        version: 6,
+        trips: [trip],
+        activeTripId: trip.id,
+        syncQueue: [],
+        syncVersions: {},
+        syncCursor: 0,
+      };
     }
   } catch {}
-  return { version: 5, trips: [], activeTripId: null };
+  return {
+    version: 6,
+    trips: [],
+    activeTripId: null,
+    syncQueue: [],
+    syncVersions: {},
+    syncCursor: 0,
+  };
 }
 
 export function sortPlanItems(items) {

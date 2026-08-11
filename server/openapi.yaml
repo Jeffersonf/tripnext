@@ -60,7 +60,7 @@ paths:
       operationId: updateTrip
       security: [{ bearerAuth: [] }]
       parameters:
-        - { name: tripId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: tripId, in: path, required: true, schema: { type: string, maxLength: 200 } }
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [data], properties: { baseVersion: { type: integer }, data: { type: object, additionalProperties: true } } } } }
@@ -88,7 +88,7 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: cursor, in: query, schema: { type: integer, minimum: 0 } }
-        - { name: tripId, in: query, schema: { type: string, format: uuid } }
+        - { name: tripId, in: query, schema: { type: string, maxLength: 200 } }
       responses:
         "200": { description: Mudanças ordenadas e novo cursor }
 components:
@@ -110,13 +110,13 @@ components:
     TripWrite:
       type: object
       required: [data]
-      properties: { id: { type: string, format: uuid }, data: { type: object, required: [name], additionalProperties: true } }
+      properties: { id: { type: string, maxLength: 200 }, data: { type: object, required: [name], additionalProperties: true } }
     SyncOperation:
       type: object
       required: [mutationId, tripId, entityType, entityId]
       properties:
         mutationId: { type: string, format: uuid }
-        tripId: { type: string, format: uuid }
+        tripId: { type: string, maxLength: 200 }
         entityType: { type: string, minLength: 1 }
         entityId: { type: string, minLength: 1 }
         baseVersion: { type: integer, minimum: 0 }

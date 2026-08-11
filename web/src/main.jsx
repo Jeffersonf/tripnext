@@ -30,6 +30,10 @@ import {
   Copy,
   GitCompareArrows,
   Trophy,
+  Cloud,
+  RefreshCw,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import "./style.css";
 import "./improvements.css";
@@ -62,7 +66,15 @@ import "./routes.css";
 import "./route-provider.css";
 import "./logistics.css";
 import "./comparisons.css";
+import "./sync.css";
+import "./sync-extra.css";
 import { fetchDrivingRoute } from "./routeProvider.js";
+import { createApiClient } from "./apiClient.js";
+import {
+  queueTripDeletion,
+  queueTripSync,
+  synchronizeStore,
+} from "./syncClient.js";
 
 const TYPES = {
   transporte: { label: "Transporte", icon: Train, color: "#2563eb" },
@@ -124,6 +136,12 @@ const daysBetween = (start, end) => {
 
 function App() {
   const [store, setStore] = useState(loadStore);
+  const [session, setSession] = useState(loadSession);
+  const [syncState, setSyncState] = useState({
+    status: "idle",
+    message: "",
+    conflicts: [],
+  });
   const [tab, setTab] = useState("inicio");
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -137,12 +155,18 @@ function App() {
     localStorage.removeItem("tripnext-trip");
   }, [store]);
   const setTrip = (next) =>
-    setStore((s) => ({
-      ...s,
-      trips: s.trips.map((t) =>
-        t.id === trip?.id ? (typeof next === "function" ? next(t) : next) : t,
-      ),
-    }));
+    setStore((s) => {
+      const current = s.trips.find((t) => t.id === trip?.id);
+      if (!current) return s;
+      const changed = typeof next === "function" ? next(current) : next;
+      return queueTripSync(
+        {
+          ...s,
+          trips: s.trips.map((t) => (t.id === current.id ? changed : t)),
+        },
+        changed,
+      );
+    });
   const update = (patch) =>
     setTrip((t) => ({ ...t, ...patch, updatedAt: new Date().toISOString() }));
   const createTrip = (data) => {
@@ -153,11 +177,12 @@ function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setStore((s) => ({
-      ...s,
-      trips: [...s.trips, item],
-      activeTripId: item.id,
-    }));
+    setStore((s) =>
+      queueTripSync(
+        { ...s, trips: [...s.trips, item], activeTripId: item.id },
+        item,
+      ),
+    );
     setModal(null);
     setTab("inicio");
   };
@@ -181,11 +206,12 @@ function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setStore((s) => ({
-      ...s,
-      trips: [...s.trips, copy],
-      activeTripId: copy.id,
-    }));
+    setStore((s) =>
+      queueTripSync(
+        { ...s, trips: [...s.trips, copy], activeTripId: copy.id },
+        copy,
+      ),
+    );
     setTab("inicio");
   };
   const archiveTrip = () => {
@@ -193,13 +219,21 @@ function App() {
     const remaining = store.trips.filter(
       (t) => t.id !== trip.id && !t.archived,
     );
-    setStore((s) => ({
-      ...s,
-      trips: s.trips.map((t) =>
-        t.id === trip.id ? { ...t, archived: true } : t,
-      ),
-      activeTripId: remaining[0]?.id || null,
-    }));
+    setStore((s) => {
+      const archived = {
+        ...trip,
+        archived: true,
+        updatedAt: new Date().toISOString(),
+      };
+      return queueTripSync(
+        {
+          ...s,
+          trips: s.trips.map((t) => (t.id === trip.id ? archived : t)),
+          activeTripId: remaining[0]?.id || null,
+        },
+        archived,
+      );
+    });
   };
   const saveEvent = (e) => {
     const list = [...(trip.itinerary || [])];
@@ -224,6 +258,97 @@ function App() {
   const openEdit = (i) => {
     setEditing(i);
     setModal("event");
+  };
+  const saveSession = (value) => {
+    setSession(value);
+    if (value)
+      sessionStorage.setItem("tripnext-session", JSON.stringify(value));
+    else sessionStorage.removeItem("tripnext-session");
+  };
+  const syncNow = async () => {
+    if (!session) {
+      setModal("auth");
+      return;
+    }
+    setSyncState({ status: "syncing", message: "Enviando alterações…" });
+    try {
+      const result = await synchronizeStore(
+        store,
+        createApiClient(session.apiUrl, session.token),
+      );
+      setStore(result.store);
+      setSyncState({
+        status: result.conflicts.length ? "conflict" : "success",
+        message: result.conflicts.length
+          ? `${result.conflicts.length} conflito(s) aguardando resolução`
+          : `${result.pushed} enviada(s), ${result.pulled} recebida(s)`,
+        conflicts: result.conflicts,
+      });
+    } catch (error) {
+      if (error.status === 401) saveSession(null);
+      setSyncState({
+        status: "error",
+        message:
+          error.status === 401
+            ? "Sessão expirada. Entre novamente."
+            : "Não foi possível sincronizar. Seu plano continua salvo neste dispositivo.",
+        conflicts: [],
+      });
+    }
+  };
+  const keepLocalConflicts = () => {
+    setStore((current) => ({
+      ...current,
+      syncQueue: (current.syncQueue || []).map((operation) => {
+        const conflict = syncState.conflicts?.find(
+          (item) => item.mutationId === operation.mutationId,
+        );
+        return conflict
+          ? {
+              ...operation,
+              mutationId: newId(),
+              baseVersion: Number(conflict.current.version),
+            }
+          : operation;
+      }),
+    }));
+    setSyncState({
+      status: "idle",
+      message: "Versão local pronta para ser reenviada.",
+      conflicts: [],
+    });
+  };
+  const useRemoteConflicts = () => {
+    setStore((current) => {
+      const rejected = new Set(
+          (syncState.conflicts || []).map((item) => item.mutationId),
+        ),
+        trips = [...current.trips],
+        versions = { ...(current.syncVersions || {}) };
+      (syncState.conflicts || []).forEach((conflict) => {
+        const operation = (current.syncQueue || []).find(
+            (item) => item.mutationId === conflict.mutationId,
+          ),
+          index = trips.findIndex((item) => item.id === operation?.tripId);
+        if (index >= 0 && conflict.current.payload)
+          trips[index] = conflict.current.payload;
+        if (operation)
+          versions[operation.tripId] = Number(conflict.current.version);
+      });
+      return {
+        ...current,
+        trips,
+        syncVersions: versions,
+        syncQueue: (current.syncQueue || []).filter(
+          (item) => !rejected.has(item.mutationId),
+        ),
+      };
+    });
+    setSyncState({
+      status: "success",
+      message: "Versão da nuvem aplicada.",
+      conflicts: [],
+    });
   };
   const dialogs = (
     <>
@@ -298,14 +423,43 @@ function App() {
           }}
         />
       )}
+      {modal === "auth" && (
+        <AuthModal
+          initialApiUrl={
+            session?.apiUrl ||
+            localStorage.getItem("tripnext-api-url") ||
+            "http://localhost:8787"
+          }
+          onClose={() => setModal(null)}
+          onAuthenticated={(value) => {
+            localStorage.setItem("tripnext-api-url", value.apiUrl);
+            saveSession(value);
+            setModal(null);
+            setSyncState({
+              status: "idle",
+              message: "Conta conectada. Sincronize quando quiser.",
+            });
+          }}
+        />
+      )}
     </>
   );
   const restore = (id) =>
-    setStore((s) => ({
-      ...s,
-      trips: s.trips.map((t) => (t.id === id ? { ...t, archived: false } : t)),
-      activeTripId: id,
-    }));
+    setStore((s) => {
+      const restored = {
+        ...s.trips.find((t) => t.id === id),
+        archived: false,
+        updatedAt: new Date().toISOString(),
+      };
+      return queueTripSync(
+        {
+          ...s,
+          trips: s.trips.map((t) => (t.id === id ? restored : t)),
+          activeTripId: id,
+        },
+        restored,
+      );
+    });
   if (!trip)
     return (
       <>
@@ -313,6 +467,10 @@ function App() {
           onCreate={() => setModal("newTrip")}
           archived={store.trips.filter((t) => t.archived)}
           restore={restore}
+          session={session}
+          signIn={() => setModal("auth")}
+          syncNow={syncNow}
+          syncState={syncState}
         />
         {dialogs}
       </>
@@ -327,6 +485,7 @@ function App() {
           trips={store.trips.filter((t) => !t.archived)}
           select={(id) => setStore((s) => ({ ...s, activeTripId: id }))}
           create={() => setModal("newTrip")}
+          session={session}
         />
         <main>
           {tab === "inicio" && <Home trip={trip} go={setTab} open={setModal} />}
@@ -435,9 +594,23 @@ function App() {
                   setStore((s) => {
                     const trips = s.trips.filter((t) => t.id !== trip.id),
                       next = trips.find((t) => !t.archived);
-                    return { ...s, trips, activeTripId: next?.id || null };
+                    return queueTripDeletion(
+                      { ...s, trips, activeTripId: next?.id || null },
+                      trip.id,
+                    );
                   });
               }}
+              session={session}
+              syncState={syncState}
+              pendingCount={(store.syncQueue || []).length}
+              syncNow={syncNow}
+              signIn={() => setModal("auth")}
+              signOut={() => {
+                saveSession(null);
+                setSyncState({ status: "idle", message: "" });
+              }}
+              keepLocalConflicts={keepLocalConflicts}
+              useRemoteConflicts={useRemoteConflicts}
             />
           )}
         </main>
@@ -446,7 +619,7 @@ function App() {
     </>
   );
 }
-function Sidebar({ tab, setTab, trip, trips, select, create }) {
+function Sidebar({ tab, setTab, trip, trips, select, create, session }) {
   const items = [
     ["inicio", "Visão geral", Map],
     ["itinerario", "Roteiro", CalendarDays],
@@ -490,16 +663,26 @@ function Sidebar({ tab, setTab, trip, trips, select, create }) {
         ))}
       </nav>
       <div className="profile">
-        <i>J</i>
+        <i>{session?.user?.name?.[0]?.toUpperCase() || "L"}</i>
         <div>
-          <b>Jefferson</b>
-          <small>{trips.length} viagem(ns)</small>
+          <b>{session?.user?.name || "Modo local"}</b>
+          <small>
+            {session ? session.user.email : `${trips.length} viagem(ns)`}
+          </small>
         </div>
       </div>
     </aside>
   );
 }
-function Empty({ onCreate, archived = [], restore }) {
+function Empty({
+  onCreate,
+  archived = [],
+  restore,
+  session,
+  signIn,
+  syncNow,
+  syncState,
+}) {
   return (
     <div className="empty">
       <div className="empty-card">
@@ -515,6 +698,17 @@ function Empty({ onCreate, archived = [], restore }) {
         <button className="primary" onClick={onCreate}>
           <Plus /> Começar a planejar
         </button>
+        <button
+          className="outline empty-sync"
+          onClick={session ? syncNow : signIn}
+          disabled={syncState?.status === "syncing"}
+        >
+          {session ? <RefreshCw /> : <LogIn />}{" "}
+          {session ? "Buscar minhas viagens" : "Entrar para recuperar viagens"}
+        </button>
+        {syncState?.message && (
+          <small className="sync-message">{syncState.message}</small>
+        )}
         {archived.length > 0 && (
           <div className="archived-empty">
             <small>VIAGENS ARQUIVADAS</small>
@@ -1736,10 +1930,67 @@ function SettingsPage({
   duplicate,
   archive,
   remove,
+  session,
+  syncState,
+  pendingCount,
+  syncNow,
+  signIn,
+  signOut,
+  keepLocalConflicts,
+  useRemoteConflicts,
 }) {
   return (
     <div className="page">
       <Header title="Configurações da viagem" subtitle={trip.name} />
+      <Card className={`sync-panel ${syncState.status}`}>
+        <div>
+          <Cloud />
+          <span>
+            <b>
+              {session
+                ? `Conectado como ${session.user.name}`
+                : "Planejamento somente neste dispositivo"}
+            </b>
+            <small>
+              {syncState.message ||
+                (session
+                  ? `${pendingCount} alteração(ões) aguardando sincronização`
+                  : "Entre para acessar a mesma viagem em outros dispositivos.")}
+            </small>
+          </span>
+        </div>
+        {session ? (
+          <div className="sync-actions">
+            <button
+              className="primary small"
+              onClick={syncNow}
+              disabled={syncState.status === "syncing"}
+            >
+              <RefreshCw
+                className={syncState.status === "syncing" ? "spinning" : ""}
+              />{" "}
+              Sincronizar agora
+            </button>
+            <button className="outline" onClick={signOut}>
+              <LogOut /> Sair
+            </button>
+          </div>
+        ) : (
+          <button className="primary small" onClick={signIn}>
+            <LogIn /> Entrar ou criar conta
+          </button>
+        )}
+        {syncState.status === "conflict" && (
+          <div className="conflict-actions">
+            <button className="outline" onClick={useRemoteConflicts}>
+              Usar versão da nuvem
+            </button>
+            <button className="outline" onClick={keepLocalConflicts}>
+              Manter versão deste dispositivo
+            </button>
+          </div>
+        )}
+      </Card>
       <Card className="settings">
         <button onClick={edit}>
           <span>
@@ -1764,7 +2015,7 @@ function SettingsPage({
         </button>
         <div>
           <b>Armazenamento</b>
-          <span>Neste dispositivo</span>
+          <span>{session ? "Local-first + nuvem" : "Neste dispositivo"}</span>
         </div>
       </Card>
       {archived.length > 0 && (
@@ -1803,6 +2054,140 @@ function Blank({ icon: I, title, text, action }) {
         </button>
       )}
     </div>
+  );
+}
+function AuthModal({ initialApiUrl, onClose, onAuthenticated }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({
+    apiUrl: initialApiUrl,
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [state, setState] = useState({ loading: false, error: "" });
+  const set = (key, value) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const submit = async () => {
+    const apiUrl = form.apiUrl.trim().replace(/\/$/, "");
+    if (
+      !apiUrl ||
+      (!apiUrl.startsWith("https://") &&
+        !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(apiUrl))
+    ) {
+      setState({
+        loading: false,
+        error: "Use HTTPS; HTTP é aceito apenas no servidor local.",
+      });
+      return;
+    }
+    setState({ loading: true, error: "" });
+    try {
+      const api = createApiClient(apiUrl);
+      const result =
+        mode === "register"
+          ? await api.register({
+              name: form.name.trim(),
+              email: form.email.trim(),
+              password: form.password,
+            })
+          : await api.login({
+              email: form.email.trim(),
+              password: form.password,
+            });
+      onAuthenticated({ apiUrl, token: result.token, user: result.user });
+    } catch (error) {
+      setState({
+        loading: false,
+        error:
+          error.status === 401
+            ? "E-mail ou senha incorretos."
+            : error.status === 409
+              ? "Este e-mail já tem uma conta."
+              : error.body?.details || "Não foi possível conectar à API.",
+      });
+    }
+  };
+  return (
+    <Modal
+      title={mode === "login" ? "Entrar no TripNext" : "Criar conta"}
+      close={onClose}
+    >
+      <div className="fields auth-fields">
+        <label>
+          Endereço da API
+          <input
+            value={form.apiUrl}
+            onChange={(event) => set("apiUrl", event.target.value)}
+            placeholder="https://api.seudominio.com"
+          />
+        </label>
+        {mode === "register" && (
+          <label>
+            Seu nome
+            <input
+              value={form.name}
+              onChange={(event) => set("name", event.target.value)}
+              autoComplete="name"
+            />
+          </label>
+        )}
+        <label>
+          E-mail
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) => set("email", event.target.value)}
+            autoComplete="email"
+          />
+        </label>
+        <label>
+          Senha
+          <input
+            type="password"
+            minLength="10"
+            value={form.password}
+            onChange={(event) => set("password", event.target.value)}
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+          />
+        </label>
+        {state.error && (
+          <p className="form-error">
+            <AlertTriangle /> {state.error}
+          </p>
+        )}
+        <button
+          className="primary"
+          disabled={
+            state.loading ||
+            !form.email ||
+            form.password.length < 10 ||
+            (mode === "register" && form.name.trim().length < 2)
+          }
+          onClick={submit}
+        >
+          {state.loading
+            ? "Conectando…"
+            : mode === "login"
+              ? "Entrar"
+              : "Criar conta e entrar"}
+        </button>
+        <button
+          className="text-action"
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setState({ loading: false, error: "" });
+          }}
+        >
+          {mode === "login" ? "Ainda não tenho conta" : "Já tenho uma conta"}
+        </button>
+        <small>
+          O planejamento continua disponível localmente quando a API estiver
+          offline.
+        </small>
+      </div>
+    </Modal>
   );
 }
 function TripModal({ initial, onClose, onSave }) {
@@ -2845,6 +3230,16 @@ function loadStore() {
     localStorage.getItem("tripnext-trip"),
     newId,
   );
+}
+function loadSession() {
+  try {
+    const session = JSON.parse(
+      sessionStorage.getItem("tripnext-session") || "null",
+    );
+    return session?.token && session?.apiUrl && session?.user ? session : null;
+  } catch {
+    return null;
+  }
 }
 function exportCalendar(trip) {
   const esc = (v) =>

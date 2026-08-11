@@ -1,0 +1,19 @@
+.empty-sync {
+  margin: 10px auto 0;
+}
+.empty-sync svg {
+  width: 17px;
+}
+.sync-message {
+  display: block;
+  margin-top: 9px;
+  color: #6f7b6a;
+}
+.conflict-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.conflict-actions button {
+  font-size: 12px;
+}

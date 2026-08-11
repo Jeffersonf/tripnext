@@ -25,7 +25,7 @@ test("migra uma viagem legada sem perder roteiro", () => {
     () => `id-${++n}`,
     "2026-08-11T00:00:00Z",
   );
-  assert.equal(data.version, 5);
+  assert.equal(data.version, 6);
   assert.equal(data.trips[0].name, "Chile");
   assert.equal(data.trips[0].itinerary[0].title, "Voo");
   assert.equal(data.trips[0].itinerary[0].costMin, 800);
@@ -42,7 +42,7 @@ test("migra coleção v2 e preserva viagem ativa", () => {
     ],
   };
   const data = migrateStoredData(JSON.stringify(raw), null);
-  assert.equal(data.version, 5);
+  assert.equal(data.version, 6);
   assert.equal(data.activeTripId, "b");
   assert.equal(data.trips.length, 2);
 });

@@ -1,0 +1,74 @@
+.sync-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.sync-panel > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sync-panel > div:first-child > svg {
+  width: 25px;
+  color: #3f7d00;
+}
+.sync-panel span {
+  display: grid;
+  gap: 3px;
+}
+.sync-panel small {
+  color: #6f7b6a;
+}
+.sync-panel.error,
+.sync-panel.conflict {
+  border-color: #e5a07d;
+  background: #fffaf5;
+}
+.sync-actions {
+  display: flex;
+  gap: 8px;
+}
+.sync-actions svg,
+.sync-panel > button svg {
+  width: 16px;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+.form-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #a13c16;
+  background: #fff0df;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 0;
+}
+.form-error svg {
+  width: 17px;
+}
+.text-action {
+  border: 0;
+  background: transparent;
+  color: #3f7d00;
+  font-weight: 600;
+  padding: 7px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 650px) {
+  .sync-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .sync-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

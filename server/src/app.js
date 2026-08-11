@@ -47,7 +47,7 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
   app.get("/api/trips", authenticate, async (request, response) => response.json({ trips: await store.listTrips(request.auth.sub) }));
   app.post("/api/trips", authenticate, async (request, response, next) => {
     try {
-      if (request.body?.id && !uuidPattern.test(request.body.id)) return badRequest(response, "id must be UUID");
+      if (request.body?.id && String(request.body.id).length > 200) return badRequest(response, "id is too long");
       const data = request.body?.data;
       if (!data || typeof data !== "object" || !String(data.name || "").trim()) return badRequest(response, "data.name is required");
       response.status(201).json({ trip: await store.createTrip(request.auth.sub, { id: request.body.id, data }) });
@@ -66,14 +66,14 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
     try {
       const operations = request.body?.operations;
       if (!Array.isArray(operations) || operations.length > 500) return badRequest(response, "operations must be an array with at most 500 items");
-      for (const operation of operations) if (!uuidPattern.test(String(operation.mutationId || "")) || !uuidPattern.test(String(operation.tripId || "")) || !operation.entityType || !operation.entityId || (!operation.deleted && (operation.payload == null || typeof operation.payload !== "object"))) return badRequest(response, "each operation requires UUID mutationId/tripId, entityType, entityId and payload or deleted=true");
+      for (const operation of operations) if (!uuidPattern.test(String(operation.mutationId || "")) || !String(operation.tripId || "") || !operation.entityType || !operation.entityId || (!operation.deleted && (operation.payload == null || typeof operation.payload !== "object"))) return badRequest(response, "each operation requires UUID mutationId, tripId, entityType, entityId and payload or deleted=true");
       response.json({ results: await store.push(request.auth.sub, operations) });
     } catch (error) { next(error); }
   });
   app.get("/api/sync/pull", authenticate, async (request, response, next) => {
     try {
       const cursor = Math.max(0, Number(request.query.cursor) || 0), tripId = request.query.tripId ? String(request.query.tripId) : null;
-      if (tripId && !uuidPattern.test(tripId)) return badRequest(response, "tripId must be UUID");
+      if (tripId && tripId.length > 200) return badRequest(response, "tripId is too long");
       response.json(await store.pull(request.auth.sub, cursor, tripId));
     } catch (error) { next(error); }
   });
