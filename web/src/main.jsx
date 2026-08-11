@@ -28,6 +28,8 @@ import {
   Lightbulb,
   Clock,
   Copy,
+  GitCompareArrows,
+  Trophy,
 } from "lucide-react";
 import "./style.css";
 import "./improvements.css";
@@ -57,6 +59,7 @@ import "./map.css";
 import "./routes.css";
 import "./route-provider.css";
 import "./logistics.css";
+import "./comparisons.css";
 import { fetchDrivingRoute } from "./routeProvider.js";
 
 const TYPES = {
@@ -77,6 +80,7 @@ const emptyTrip = {
   budget: 0,
   itinerary: [],
   ideas: [],
+  options: [],
   checklist: [],
 };
 const money = (v) =>
@@ -153,8 +157,18 @@ function App() {
       ...trip,
       id: newId(),
       name: `${trip.name} — cópia`,
-      itinerary: (trip.itinerary || []).map((x) => ({ ...x })),
-      checklist: (trip.checklist || []).map((x) => ({ ...x, done: false })),
+      itinerary: (trip.itinerary || []).map((x) => ({ ...x, id: newId() })),
+      ideas: (trip.ideas || []).map((x) => ({ ...x, id: newId() })),
+      options: (trip.options || []).map((x) => ({
+        ...x,
+        id: newId(),
+        chosen: false,
+      })),
+      checklist: (trip.checklist || []).map((x) => ({
+        ...x,
+        id: newId(),
+        done: false,
+      })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -238,6 +252,25 @@ function App() {
           }}
         />
       )}
+      {modal === "option" && (
+        <OptionModal
+          onClose={() => setModal(null)}
+          onSave={(option) => {
+            update({
+              options: [
+                ...(trip.options || []),
+                {
+                  ...option,
+                  id: newId(),
+                  chosen: false,
+                  observedAt: new Date().toISOString(),
+                },
+              ],
+            });
+            setModal(null);
+          }}
+        />
+      )}
       {modal === "task" && (
         <TaskModal
           onClose={() => setModal(null)}
@@ -307,6 +340,34 @@ function App() {
               }}
             />
           )}
+          {tab === "comparar" && (
+            <Comparisons
+              trip={trip}
+              update={update}
+              open={() => setModal("option")}
+              schedule={(option) => {
+                setDraftEvent({
+                  type: option.kind,
+                  title: option.title,
+                  location: option.location || "",
+                  date: trip.start,
+                  time: "09:00",
+                  status: option.chosen ? "reservar" : "pesquisar",
+                  cost: option.price,
+                  link: option.url || "",
+                  notes: [
+                    option.provider && `Fornecedor: ${option.provider}`,
+                    option.cancellation &&
+                      `Cancelamento: ${option.cancellation}`,
+                    option.baggage && `Bagagem: ${option.baggage}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                });
+                setModal("event");
+              }}
+            />
+          )}
           {tab === "custos" && <Costs trip={trip} edit={openEdit} />}
           {tab === "checklist" && (
             <Checklist
@@ -344,6 +405,7 @@ function Sidebar({ tab, setTab, trip, trips, select, create }) {
     ["inicio", "Visão geral", Map],
     ["itinerario", "Roteiro", CalendarDays],
     ["ideias", "Ideias", Lightbulb],
+    ["comparar", "Comparar", GitCompareArrows],
     ["custos", "Custos previstos", Wallet],
     ["checklist", "Checklist", ListChecks],
     ["ajustes", "Ajustes", Compass],
@@ -1092,6 +1154,155 @@ function Ideas({ trip, update, open, schedule }) {
     </div>
   );
 }
+function Comparisons({ trip, update, open, schedule }) {
+  const options = trip.options || [],
+    groups = options.reduce((all, option) => {
+      (all[option.decision] ??= []).push(option);
+      return all;
+    }, {});
+  const choose = (id) => {
+    const selected = options.find((x) => x.id === id);
+    update({
+      options: options.map((x) =>
+        x.decision === selected.decision ? { ...x, chosen: x.id === id } : x,
+      ),
+    });
+  };
+  const remove = (id) =>
+    confirm("Remover esta alternativa?") &&
+    update({ options: options.filter((x) => x.id !== id) });
+  return (
+    <div className="page">
+      <Header
+        title="Comparar opções"
+        subtitle="Decida antes de reservar, sem perder as alternativas"
+        action={
+          <button className="primary small" onClick={open}>
+            <Plus /> Nova alternativa
+          </button>
+        }
+      />
+      {!options.length ? (
+        <Blank
+          icon={GitCompareArrows}
+          title="Compare antes de escolher"
+          text="Adicione voos, hotéis, transportes ou passeios da sua pesquisa."
+          action={open}
+        />
+      ) : (
+        <div className="comparison-groups">
+          {Object.entries(groups).map(([decision, items]) => {
+            const cheapest = Math.min(
+              ...items.map((x) => Number(x.price) || 0),
+            );
+            return (
+              <section key={decision}>
+                <div className="comparison-heading">
+                  <div>
+                    <small>DECISÃO</small>
+                    <h2>{decision}</h2>
+                  </div>
+                  <span>{items.length} alternativa(s)</span>
+                </div>
+                <div className="option-grid">
+                  {items.map((option) => (
+                    <Card
+                      className={`option-card ${option.chosen ? "chosen" : ""}`}
+                      key={option.id}
+                    >
+                      {option.chosen && (
+                        <span className="winner">
+                          <Trophy /> Escolhida
+                        </span>
+                      )}
+                      <div className="event-top">
+                        <TypeIcon type={option.kind} />
+                        <button
+                          className="icon-btn danger-icon"
+                          onClick={() => remove(option.id)}
+                        >
+                          <Trash2 />
+                        </button>
+                      </div>
+                      <span className="tag">
+                        {TYPES[option.kind]?.label} · observado{" "}
+                        {pretty(option.observedAt?.slice(0, 10))}
+                      </span>
+                      <h3>{option.title}</h3>
+                      <p className="provider">
+                        {option.provider || "Fornecedor não informado"}
+                      </p>
+                      <strong className="option-price">
+                        {money(option.price)}
+                      </strong>
+                      {Number(option.price) === cheapest &&
+                        items.length > 1 && (
+                          <small className="best-price">Menor preço</small>
+                        )}
+                      <dl>
+                        {option.cancellation && (
+                          <>
+                            <dt>Cancelamento</dt>
+                            <dd>{option.cancellation}</dd>
+                          </>
+                        )}
+                        {option.baggage && (
+                          <>
+                            <dt>Bagagem / inclusão</dt>
+                            <dd>{option.baggage}</dd>
+                          </>
+                        )}
+                        {option.pros && (
+                          <>
+                            <dt>Vantagens</dt>
+                            <dd>{option.pros}</dd>
+                          </>
+                        )}
+                        {option.cons && (
+                          <>
+                            <dt>Atenções</dt>
+                            <dd>{option.cons}</dd>
+                          </>
+                        )}
+                      </dl>
+                      {option.url && (
+                        <a
+                          className="source-link"
+                          href={option.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink /> Ver fonte
+                        </a>
+                      )}
+                      <div className="option-actions">
+                        <button
+                          className={option.chosen ? "selected" : ""}
+                          onClick={() => choose(option.id)}
+                        >
+                          {option.chosen ? (
+                            <>
+                              <CheckCircle2 /> Escolhida
+                            </>
+                          ) : (
+                            "Escolher"
+                          )}
+                        </button>
+                        <button onClick={() => schedule(option)}>
+                          <CalendarDays /> Levar ao roteiro
+                        </button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 function Costs({ trip, edit }) {
   const events = trip.itinerary || [],
     total = events.reduce((s, e) => s + Number(e.cost || 0), 0);
@@ -1782,6 +1993,137 @@ function IdeaModal({ onClose, onSave }) {
           onClick={() => onSave({ ...f, cost: Number(f.cost) || 0 })}
         >
           Guardar ideia
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function OptionModal({ onClose, onSave }) {
+  const [f, setF] = useState({
+      decision: "",
+      kind: "transporte",
+      title: "",
+      provider: "",
+      location: "",
+      price: "",
+      currency: "BRL",
+      cancellation: "",
+      baggage: "",
+      pros: "",
+      cons: "",
+      url: "",
+    }),
+    set = (key, value) => setF((x) => ({ ...x, [key]: value }));
+  return (
+    <Modal title="Nova alternativa" close={onClose}>
+      <div className="fields">
+        <label>
+          O que você está decidindo?
+          <input
+            autoFocus
+            value={f.decision}
+            onChange={(e) => set("decision", e.target.value)}
+            placeholder="Voo São Paulo → Buenos Aires"
+          />
+        </label>
+        <div>
+          <label>
+            Modalidade
+            <select
+              value={f.kind}
+              onChange={(e) => set("kind", e.target.value)}
+            >
+              <option value="transporte">Transporte</option>
+              <option value="hospedagem">Hospedagem</option>
+              <option value="passeio">Passeio</option>
+            </select>
+          </label>
+          <label>
+            Preço total previsto
+            <input
+              type="number"
+              min="0"
+              value={f.price}
+              onChange={(e) => set("price", e.target.value)}
+              placeholder="0"
+            />
+          </label>
+        </div>
+        <label>
+          Nome da opção
+          <input
+            value={f.title}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder="LATAM direto 10h20"
+          />
+        </label>
+        <div>
+          <label>
+            Fornecedor
+            <input
+              value={f.provider}
+              onChange={(e) => set("provider", e.target.value)}
+              placeholder="LATAM, Booking..."
+            />
+          </label>
+          <label>
+            Local
+            <input
+              value={f.location}
+              onChange={(e) => set("location", e.target.value)}
+              placeholder="Aeroporto ou endereço"
+            />
+          </label>
+        </div>
+        <label>
+          Cancelamento
+          <input
+            value={f.cancellation}
+            onChange={(e) => set("cancellation", e.target.value)}
+            placeholder="Grátis até 10/01, não reembolsável..."
+          />
+        </label>
+        <label>
+          Bagagem ou itens incluídos
+          <input
+            value={f.baggage}
+            onChange={(e) => set("baggage", e.target.value)}
+            placeholder="1 mala de 23 kg, café da manhã..."
+          />
+        </label>
+        <div>
+          <label>
+            Vantagens
+            <textarea
+              value={f.pros}
+              onChange={(e) => set("pros", e.target.value)}
+              placeholder="Direto, bom horário..."
+            />
+          </label>
+          <label>
+            Atenções
+            <textarea
+              value={f.cons}
+              onChange={(e) => set("cons", e.target.value)}
+              placeholder="Sem reembolso, conexão longa..."
+            />
+          </label>
+        </div>
+        <label>
+          Link da fonte
+          <input
+            type="url"
+            value={f.url}
+            onChange={(e) => set("url", e.target.value)}
+            placeholder="https://..."
+          />
+        </label>
+        <button
+          className="primary"
+          disabled={!f.decision || !f.title}
+          onClick={() => onSave({ ...f, price: Number(f.price) || 0 })}
+        >
+          Adicionar para comparar
         </button>
       </div>
     </Modal>

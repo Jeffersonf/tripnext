@@ -161,12 +161,12 @@ Objetivo: não ser apenas um campo de busca; cada resultado deve virar ideia, co
 
 ### Comparação
 
-- [ ] Quadro de opções para voo, ônibus, trem, hotel, carro e passeio.
+- [x] Quadro manual de alternativas para transporte, hospedagem e passeio, no web e Room.
 - [ ] Campos comparáveis por modalidade.
-- [ ] Preço observado e momento da consulta.
-- [ ] Política de cancelamento e bagagem.
-- [ ] Prós, contras e notas pessoais.
-- [ ] Marcar uma opção como escolhida sem apagar as alternativas.
+- [x] Preço observado e momento da consulta.
+- [x] Política de cancelamento e bagagem/inclusões.
+- [x] Prós, contras e notas pessoais.
+- [x] Marcar uma opção como escolhida sem apagar as alternativas.
 - [ ] Alertas de prazo e mudança relevante de preço quando o provedor permitir.
 
 ### Integrações previstas

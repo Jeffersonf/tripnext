@@ -2,11 +2,12 @@ const idFallback=()=>`item-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export function normalizeTrip(trip,idFactory=idFallback,now=new Date().toISOString()){
   return {
-    name:'',destination:'',start:'',end:'',travelers:1,budget:0,checklist:[],ideas:[],itinerary:[],
+    name:'',destination:'',start:'',end:'',travelers:1,budget:0,checklist:[],ideas:[],options:[],itinerary:[],
     ...trip,
     id:trip?.id||idFactory(),createdAt:trip?.createdAt||now,updatedAt:trip?.updatedAt||now,
     itinerary:(trip?.itinerary||[]).map((item,index)=>({...item,id:item.id||idFactory(),sortOrder:Number.isFinite(item.sortOrder)?item.sortOrder:index})),
     ideas:(trip?.ideas||[]).map(item=>({...item,id:item.id||idFactory()})),
+    options:(trip?.options||[]).map(item=>({...item,id:item.id||idFactory()})),
     checklist:trip?.checklist||[]
   };
 }

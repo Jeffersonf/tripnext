@@ -55,6 +55,9 @@ data class ItineraryEventEntity(@PrimaryKey val id: String = UUID.randomUUID().t
 @Entity(tableName = "trip_ideas", indices = [Index("tripId")])
 data class TripIdeaEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType = ItineraryType.ACTIVITY, val location: String = "", val notes: String = "", val estimatedCostMinor: Long = 0, val sourceUrl: String = "", val createdAt: Long = System.currentTimeMillis(), val latitude: Double? = null, val longitude: Double? = null, val placeId: String = "")
 
+@Entity(tableName = "trip_options", indices = [Index("tripId"), Index(value = ["tripId", "decisionGroup"])])
+data class TripOptionEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val decisionGroup: String, val title: String, val type: ItineraryType, val provider: String = "", val location: String = "", val estimatedCostMinor: Long = 0, val currency: String = "BRL", val cancellationPolicy: String = "", val inclusions: String = "", val pros: String = "", val cons: String = "", val sourceUrl: String = "", val chosen: Boolean = false, val observedAt: Long = System.currentTimeMillis())
+
 @Entity(tableName = "installment_reservations", indices = [Index("tripId")])
 data class InstallmentReservationEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ReservationType, val totalMinor: Long, val installmentCount: Int, val firstDueDate: Long, val intervalMonths: Int = 1)
 

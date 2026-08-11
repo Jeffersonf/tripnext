@@ -13,6 +13,7 @@ interface TripDao {
     @Query("SELECT * FROM expenses WHERE tripId = :tripId ORDER BY date DESC") fun observeExpenses(tripId: String): Flow<List<ExpenseEntity>>
     @Query("SELECT * FROM itinerary_events WHERE tripId = :tripId ORDER BY startsAt, sortOrder") fun observeItinerary(tripId: String): Flow<List<ItineraryEventEntity>>
     @Query("SELECT * FROM trip_ideas WHERE tripId = :tripId ORDER BY createdAt DESC") fun observeIdeas(tripId: String): Flow<List<TripIdeaEntity>>
+    @Query("SELECT * FROM trip_options WHERE tripId = :tripId ORDER BY decisionGroup, estimatedCostMinor") fun observeOptions(tripId: String): Flow<List<TripOptionEntity>>
     @Query("SELECT * FROM checklist_items WHERE tripId = :tripId ORDER BY checked, category, name") fun observeChecklist(tripId: String): Flow<List<ChecklistItemEntity>>
     @Query("SELECT * FROM category_budgets WHERE tripId = :tripId") fun observeBudgets(tripId: String): Flow<List<CategoryBudgetEntity>>
     @Query("SELECT category, SUM(amountMinor) AS amountMinor FROM expenses WHERE tripId = :tripId GROUP BY category") fun observeSpentByCategory(tripId: String): Flow<List<CategorySpent>>
@@ -21,6 +22,9 @@ interface TripDao {
     @Upsert suspend fun upsertChecklist(value: ChecklistItemEntity)
     @Upsert suspend fun upsertEvent(value: ItineraryEventEntity)
     @Upsert suspend fun upsertIdea(value: TripIdeaEntity)
+    @Upsert suspend fun upsertOption(value: TripOptionEntity)
+    @Query("UPDATE trip_options SET chosen = CASE WHEN id = :optionId THEN 1 ELSE 0 END WHERE tripId = :tripId AND decisionGroup = :decisionGroup") suspend fun chooseOptionInGroup(tripId: String, decisionGroup: String, optionId: String)
+    @Query("DELETE FROM trip_options WHERE id = :id") suspend fun deleteOption(id: String)
     @Upsert suspend fun upsertBudget(value: CategoryBudgetEntity)
     @Query("UPDATE checklist_items SET checked = NOT checked WHERE id = :id") suspend fun toggleChecklist(id: String)
     @Query("SELECT * FROM trips WHERE isActive = 1 LIMIT 1") suspend fun activeTrip(): TripEntity?
@@ -30,6 +34,7 @@ interface TripDao {
     @Query("UPDATE trips SET archived = 0 WHERE id = :id") suspend fun restoreTrip(id: String)
     @Query("DELETE FROM trip_ideas WHERE id = :id") suspend fun deleteIdea(id: String)
     @Query("DELETE FROM trip_ideas WHERE tripId = :id") suspend fun deleteIdeasForTrip(id: String)
+    @Query("DELETE FROM trip_options WHERE tripId = :id") suspend fun deleteOptionsForTrip(id: String)
     @Query("DELETE FROM expenses WHERE tripId = :id") suspend fun deleteExpensesForTrip(id: String)
     @Query("DELETE FROM itinerary_events WHERE tripId = :id") suspend fun deleteEventsForTrip(id: String)
     @Query("DELETE FROM checklist_items WHERE tripId = :id") suspend fun deleteChecklistForTrip(id: String)
@@ -39,7 +44,7 @@ interface TripDao {
     @Query("DELETE FROM trip_vehicles WHERE tripId = :id") suspend fun deleteVehiclesForTrip(id: String)
     @Query("DELETE FROM trip_participants WHERE tripId = :id") suspend fun deleteParticipantsForTrip(id: String)
     @Query("DELETE FROM trips WHERE id = :id") suspend fun deleteTripRow(id: String)
-    @Transaction suspend fun deleteTripFully(id: String) { deleteExpensesForTrip(id); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteChecklistForTrip(id); deleteBudgetsForTrip(id); deleteGoalsForTrip(id); deleteReservationsForTrip(id); deleteVehiclesForTrip(id); deleteParticipantsForTrip(id); deleteTripRow(id) }
+    @Transaction suspend fun deleteTripFully(id: String) { deleteExpensesForTrip(id); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteBudgetsForTrip(id); deleteGoalsForTrip(id); deleteReservationsForTrip(id); deleteVehiclesForTrip(id); deleteParticipantsForTrip(id); deleteTripRow(id) }
     @Query("SELECT id FROM trips WHERE name = :name") suspend fun tripIdsNamed(name: String): List<String>
     @Transaction suspend fun deleteTripsNamed(name: String) { tripIdsNamed(name).forEach { deleteTripFully(it) } }
 }

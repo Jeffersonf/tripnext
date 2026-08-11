@@ -14,6 +14,7 @@ class TripRepository(
     fun expenses(id: String) = dao.observeExpenses(id)
     fun itinerary(id: String) = dao.observeItinerary(id)
     fun ideas(id: String) = dao.observeIdeas(id)
+    fun options(id: String) = dao.observeOptions(id)
     fun checklist(id: String) = dao.observeChecklist(id)
     fun budgets(id: String) = dao.observeBudgets(id)
     fun spentByCategory(id: String) = dao.observeSpentByCategory(id)
@@ -27,6 +28,9 @@ class TripRepository(
     suspend fun saveEvent(event: ItineraryEventEntity) { dao.upsertEvent(event); enqueue("UPSERT_EVENT", event.id, "{\"id\":\"${event.id}\"}") }
     suspend fun saveIdea(idea: TripIdeaEntity) { dao.upsertIdea(idea); enqueue("UPSERT_IDEA", idea.id, "{\"id\":\"${idea.id}\"}") }
     suspend fun deleteIdea(id: String) { dao.deleteIdea(id); enqueue("DELETE_IDEA", id, "{\"id\":\"$id\"}") }
+    suspend fun saveOption(option: TripOptionEntity) { dao.upsertOption(option); enqueue("UPSERT_OPTION", option.id, "{\"id\":\"${option.id}\"}") }
+    suspend fun chooseOption(option: TripOptionEntity) { dao.chooseOptionInGroup(option.tripId, option.decisionGroup, option.id); enqueue("CHOOSE_OPTION", option.id, "{\"id\":\"${option.id}\"}") }
+    suspend fun deleteOption(id: String) { dao.deleteOption(id); enqueue("DELETE_OPTION", id, "{\"id\":\"$id\"}") }
     suspend fun saveBudget(budget: CategoryBudgetEntity) { dao.upsertBudget(budget); enqueue("UPSERT_BUDGET", "${budget.tripId}:${budget.category}", "{}") }
     suspend fun toggleChecklist(id: String) { dao.toggleChecklist(id); enqueue("TOGGLE_CHECKLIST", id, "{\"id\":\"$id\"}") }
     suspend fun activeTrip() = dao.activeTrip()

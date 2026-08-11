@@ -23,7 +23,7 @@ test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
   await page.getByRole('button',{name:'Buscar lugar'}).click();
   await page.getByRole('button',{name:/MALBA/}).click();
   await page.getByRole('button',{name:'Salvar item'}).click();
-  await page.getByRole('button',{name:'Roteiro'}).click();
+  await page.getByRole('button',{name:'Roteiro',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();
   await expect(page.getByText(/75,00/)).toBeVisible();
   await expect(page.locator('.leaflet-container')).toBeVisible();
@@ -60,4 +60,30 @@ test('mantém duas viagens independentes',async({page})=>{
   await expect(page.locator('.trip-switcher select option')).toHaveCount(2);
   await page.locator('.trip-switcher select').selectOption({label:'Viagem A'});
   await expect(page.getByRole('heading',{name:'Viagem A'})).toBeVisible();
+});
+
+test('compara alternativas, escolhe uma e leva ao roteiro',async({page})=>{
+  await page.getByRole('button',{name:'Começar a planejar'}).click();
+  await page.getByLabel('Nome do plano').fill('Férias');
+  await page.getByLabel('Para onde você vai?').fill('Rio de Janeiro');
+  await page.getByLabel('Data de ida').fill('2027-04-01');
+  await page.getByLabel('Data de volta').fill('2027-04-03');
+  await page.getByRole('button',{name:'Criar meu planejamento'}).click();
+  await page.getByRole('button',{name:'Comparar'}).click();
+  for(const [title,price] of [['Hotel Praia',1200],['Hotel Centro',900]]){
+    await page.getByRole('button',{name:/alternativa/i}).click();
+    await page.getByLabel('O que você está decidindo?').fill('Hospedagem no Rio');
+    await page.getByLabel('Modalidade').selectOption('hospedagem');
+    await page.getByLabel('Preço total previsto').fill(String(price));
+    await page.getByLabel('Nome da opção').fill(title);
+    await page.getByRole('button',{name:'Adicionar para comparar'}).click();
+  }
+  const chosenCard=page.getByRole('heading',{name:'Hotel Centro'}).locator('xpath=ancestor::section[contains(@class,"option-card")]');
+  await expect(chosenCard.getByText('Menor preço')).toBeVisible();
+  await chosenCard.getByRole('button',{name:'Escolher'}).click();
+  await expect(chosenCard.getByRole('button',{name:'Escolhida'})).toBeVisible();
+  await chosenCard.getByRole('button',{name:'Levar ao roteiro'}).click();
+  await page.getByRole('button',{name:'Salvar item'}).click();
+  await page.getByRole('button',{name:'Roteiro',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Hotel Centro'})).toBeVisible();
 });
