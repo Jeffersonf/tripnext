@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+.idea/
+local.properties
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+node_modules/
+web/dist/
+web/.git.accidental/
+*.png
+*.xml
+*.db
+*.log

@@ -1,0 +1,44 @@
+package com.tripnext.app.data
+
+import com.tripnext.app.data.local.*
+import kotlinx.coroutines.flow.Flow
+
+class TripRepository(
+    private val dao: TripDao,
+    private val pendingDao: PendingOperationDao,
+    private val remote: TripRemoteRepository
+) {
+    fun trips() = dao.observeTrips()
+    fun trip(id: String) = dao.observeTrip(id)
+    fun expenses(id: String) = dao.observeExpenses(id)
+    fun itinerary(id: String) = dao.observeItinerary(id)
+    fun checklist(id: String) = dao.observeChecklist(id)
+    fun budgets(id: String) = dao.observeBudgets(id)
+    fun spentByCategory(id: String) = dao.observeSpentByCategory(id)
+
+    suspend fun saveExpense(expense: ExpenseEntity) {
+        dao.upsertExpense(expense)
+        enqueue("UPSERT_EXPENSE", expense.id, "{\"id\":\"${expense.id}\"}")
+    }
+    suspend fun saveTrip(trip: TripEntity) { dao.upsertTrip(trip); enqueue("UPSERT_TRIP", trip.id, "{\"id\":\"${trip.id}\"}") }
+    suspend fun saveChecklist(item: ChecklistItemEntity) { dao.upsertChecklist(item); enqueue("UPSERT_CHECKLIST", item.id, "{\"id\":\"${item.id}\"}") }
+    suspend fun saveEvent(event: ItineraryEventEntity) { dao.upsertEvent(event); enqueue("UPSERT_EVENT", event.id, "{\"id\":\"${event.id}\"}") }
+    suspend fun saveBudget(budget: CategoryBudgetEntity) { dao.upsertBudget(budget); enqueue("UPSERT_BUDGET", "${budget.tripId}:${budget.category}", "{}") }
+    suspend fun toggleChecklist(id: String) { dao.toggleChecklist(id); enqueue("TOGGLE_CHECKLIST", id, "{\"id\":\"$id\"}") }
+    suspend fun activeTrip() = dao.activeTrip()
+    suspend fun activateTrip(id: String) = dao.activateTrip(id)
+    suspend fun deleteTrip(id: String) = dao.deleteTripFully(id)
+    suspend fun deleteTripsNamed(name: String) = dao.deleteTripsNamed(name)
+    suspend fun budgetCount(tripId: String) = dao.budgetCount(tripId)
+
+    private suspend fun enqueue(kind: String, entityId: String, payload: String) {
+        pendingDao.upsert(PendingOperationEntity(kind = kind, entityId = entityId, payload = payload, deduplicationKey = "$kind:$entityId"))
+    }
+    suspend fun sync(): Int {
+        var synced = 0
+        for (operation in pendingDao.all()) {
+            if (remote.push(operation).isSuccess) { pendingDao.delete(operation.id); synced++ } else break
+        }
+        return synced
+    }
+}
