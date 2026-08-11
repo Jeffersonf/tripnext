@@ -1,5 +1,14 @@
 # Roadmap — TripNext
 
+## Web — planejamento da viagem
+
+- [x] Roteiro organizado por cada dia da viagem.
+- [x] Transporte, hospedagem, passeios, alimentação e deslocamentos previstos.
+- [x] Valores estimados por item e consolidação por categoria e por pessoa.
+- [x] Reserva, link, duração, local e observações em cada item.
+- [x] Edição e exclusão de itens do roteiro.
+- [x] Build web de produção aprovado em 2026-08-11.
+
 ## 0.1.0 — Fundação local
 
 ### Concluído

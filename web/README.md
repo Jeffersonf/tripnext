@@ -22,10 +22,10 @@ Os arquivos finais ficam em `web/dist`.
 
 ## Funcionalidades
 
-- criação e exclusão de viagem;
-- painel de planejamento e progresso;
-- orçamento e resumo da viagem;
-- inclusão de eventos no itinerário;
-- checklist interativo e categorizado;
+- criação e edição do plano de viagem, com destino, período e viajantes;
+- roteiro por dia com transporte, hospedagem, passeios e deslocamentos;
+- horário, duração, endereço, reserva, link e observações por item;
+- custos previstos totais, por pessoa e por categoria;
+- checklist interativo para a preparação da viagem;
 - layout desktop e mobile;
 - persistência local via `localStorage`.
