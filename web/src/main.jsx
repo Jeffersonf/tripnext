@@ -46,6 +46,8 @@ import {
   dayPart,
   buildRouteLegs,
   findTightRouteLegs,
+  costRange,
+  summarizeCosts,
 } from "./planner.js";
 import {
   MapContainer,
@@ -78,13 +80,15 @@ const emptyTrip = {
   end: "",
   travelers: 1,
   budget: 0,
+  currency: "BRL",
+  contingencyPercent: 0,
   itinerary: [],
   ideas: [],
   options: [],
   checklist: [],
 };
-const money = (v) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+const money = (v, currency = "BRL") =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(
     Number(v) || 0,
   );
 const pretty = (d) =>
@@ -366,6 +370,13 @@ function App() {
                       : 0),
                   status: option.chosen ? "reservar" : "pesquisar",
                   cost: option.price,
+                  costMin: option.costMin,
+                  costMax: option.costMax,
+                  costCurrency: option.costCurrency,
+                  exchangeRate: option.exchangeRate,
+                  quoteDate: option.quoteDate,
+                  costScope: option.costScope,
+                  costClass: option.costClass,
                   link: option.url || "",
                   notes: [
                     option.provider && `Fornecedor: ${option.provider}`,
@@ -1209,7 +1220,9 @@ function Comparisons({ trip, update, open, schedule }) {
         <div className="comparison-groups">
           {Object.entries(groups).map(([decision, items]) => {
             const cheapest = Math.min(
-              ...items.map((x) => Number(x.price) || 0),
+              ...items.map(
+                (x) => costRange(x, trip.travelers, "price").expected,
+              ),
             );
             return (
               <section key={decision}>
@@ -1221,142 +1234,171 @@ function Comparisons({ trip, update, open, schedule }) {
                   <span>{items.length} alternativa(s)</span>
                 </div>
                 <div className="option-grid">
-                  {items.map((option) => (
-                    <Card
-                      className={`option-card ${option.chosen ? "chosen" : ""}`}
-                      key={option.id}
-                    >
-                      {option.chosen && (
-                        <span className="winner">
-                          <Trophy /> Escolhida
+                  {items.map((option) => {
+                    const range = costRange(option, trip.travelers, "price");
+                    return (
+                      <Card
+                        className={`option-card ${option.chosen ? "chosen" : ""}`}
+                        key={option.id}
+                      >
+                        {option.chosen && (
+                          <span className="winner">
+                            <Trophy /> Escolhida
+                          </span>
+                        )}
+                        <div className="event-top">
+                          <TypeIcon type={option.kind} />
+                          <button
+                            className="icon-btn danger-icon"
+                            onClick={() => remove(option.id)}
+                          >
+                            <Trash2 />
+                          </button>
+                        </div>
+                        <span className="tag">
+                          {TYPES[option.kind]?.label} · observado{" "}
+                          {pretty(option.observedAt?.slice(0, 10))}
                         </span>
-                      )}
-                      <div className="event-top">
-                        <TypeIcon type={option.kind} />
-                        <button
-                          className="icon-btn danger-icon"
-                          onClick={() => remove(option.id)}
-                        >
-                          <Trash2 />
-                        </button>
-                      </div>
-                      <span className="tag">
-                        {TYPES[option.kind]?.label} · observado{" "}
-                        {pretty(option.observedAt?.slice(0, 10))}
-                      </span>
-                      <h3>{option.title}</h3>
-                      <p className="provider">
-                        {option.provider || "Fornecedor não informado"}
-                      </p>
-                      <strong className="option-price">
-                        {money(option.price)}
-                      </strong>
-                      {Number(option.price) === cheapest &&
-                        items.length > 1 && (
+                        <h3>{option.title}</h3>
+                        <p className="provider">
+                          {option.provider || "Fornecedor não informado"}
+                        </p>
+                        <strong className="option-price">
+                          {money(range.expected, trip.currency)}
+                        </strong>
+                        {(range.min !== range.expected ||
+                          range.max !== range.expected) && (
+                          <small>
+                            {money(range.min, trip.currency)} a{" "}
+                            {money(range.max, trip.currency)}
+                          </small>
+                        )}
+                        {option.costCurrency !== trip.currency && (
+                          <small>
+                            {money(option.price, option.costCurrency)} · cotação{" "}
+                            {Number(option.exchangeRate || 1).toLocaleString(
+                              "pt-BR",
+                            )}
+                            {option.quoteDate
+                              ? ` em ${pretty(option.quoteDate)}`
+                              : ""}
+                          </small>
+                        )}
+                        <small>
+                          {option.costScope === "person"
+                            ? `Por pessoa × ${trip.travelers || 1}`
+                            : "Total do grupo"}{" "}
+                          ·{" "}
+                          {option.costClass === "fixed"
+                            ? "custo fixo"
+                            : "custo diário"}
+                        </small>
+                        {range.expected === cheapest && items.length > 1 && (
                           <small className="best-price">Menor preço</small>
                         )}
-                      <dl>
-                        {option.kind === "transporte" && option.origin && (
-                          <>
-                            <dt>Trajeto</dt>
-                            <dd>
-                              {option.origin} →{" "}
-                              {option.destination || "a definir"}
-                            </dd>
-                          </>
-                        )}
-                        {option.kind === "transporte" && option.departAt && (
-                          <>
-                            <dt>Horários</dt>
-                            <dd>
-                              {new Date(option.departAt).toLocaleString(
-                                "pt-BR",
-                              )}{" "}
-                              {option.arriveAt
-                                ? `→ ${new Date(option.arriveAt).toLocaleString("pt-BR")}`
-                                : ""}
-                            </dd>
-                          </>
-                        )}
-                        {option.kind === "transporte" &&
-                          option.stops !== "" && (
+                        <dl>
+                          {option.kind === "transporte" && option.origin && (
                             <>
-                              <dt>Paradas</dt>
-                              <dd>{option.stops}</dd>
+                              <dt>Trajeto</dt>
+                              <dd>
+                                {option.origin} →{" "}
+                                {option.destination || "a definir"}
+                              </dd>
                             </>
                           )}
-                        {option.kind === "hospedagem" && option.roomType && (
-                          <>
-                            <dt>Quarto</dt>
-                            <dd>{option.roomType}</dd>
-                          </>
-                        )}
-                        {option.kind === "hospedagem" && option.nights && (
-                          <>
-                            <dt>Diárias</dt>
-                            <dd>{option.nights}</dd>
-                          </>
-                        )}
-                        {option.kind === "passeio" && option.duration && (
-                          <>
-                            <dt>Duração</dt>
-                            <dd>{option.duration} min</dd>
-                          </>
-                        )}
-                        {option.cancellation && (
-                          <>
-                            <dt>Cancelamento</dt>
-                            <dd>{option.cancellation}</dd>
-                          </>
-                        )}
-                        {option.baggage && (
-                          <>
-                            <dt>Bagagem / inclusão</dt>
-                            <dd>{option.baggage}</dd>
-                          </>
-                        )}
-                        {option.pros && (
-                          <>
-                            <dt>Vantagens</dt>
-                            <dd>{option.pros}</dd>
-                          </>
-                        )}
-                        {option.cons && (
-                          <>
-                            <dt>Atenções</dt>
-                            <dd>{option.cons}</dd>
-                          </>
-                        )}
-                      </dl>
-                      {option.url && (
-                        <a
-                          className="source-link"
-                          href={option.url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <ExternalLink /> Ver fonte
-                        </a>
-                      )}
-                      <div className="option-actions">
-                        <button
-                          className={option.chosen ? "selected" : ""}
-                          onClick={() => choose(option.id)}
-                        >
-                          {option.chosen ? (
+                          {option.kind === "transporte" && option.departAt && (
                             <>
-                              <CheckCircle2 /> Escolhida
+                              <dt>Horários</dt>
+                              <dd>
+                                {new Date(option.departAt).toLocaleString(
+                                  "pt-BR",
+                                )}{" "}
+                                {option.arriveAt
+                                  ? `→ ${new Date(option.arriveAt).toLocaleString("pt-BR")}`
+                                  : ""}
+                              </dd>
                             </>
-                          ) : (
-                            "Escolher"
                           )}
-                        </button>
-                        <button onClick={() => schedule(option)}>
-                          <CalendarDays /> Levar ao roteiro
-                        </button>
-                      </div>
-                    </Card>
-                  ))}
+                          {option.kind === "transporte" &&
+                            option.stops !== "" && (
+                              <>
+                                <dt>Paradas</dt>
+                                <dd>{option.stops}</dd>
+                              </>
+                            )}
+                          {option.kind === "hospedagem" && option.roomType && (
+                            <>
+                              <dt>Quarto</dt>
+                              <dd>{option.roomType}</dd>
+                            </>
+                          )}
+                          {option.kind === "hospedagem" && option.nights && (
+                            <>
+                              <dt>Diárias</dt>
+                              <dd>{option.nights}</dd>
+                            </>
+                          )}
+                          {option.kind === "passeio" && option.duration && (
+                            <>
+                              <dt>Duração</dt>
+                              <dd>{option.duration} min</dd>
+                            </>
+                          )}
+                          {option.cancellation && (
+                            <>
+                              <dt>Cancelamento</dt>
+                              <dd>{option.cancellation}</dd>
+                            </>
+                          )}
+                          {option.baggage && (
+                            <>
+                              <dt>Bagagem / inclusão</dt>
+                              <dd>{option.baggage}</dd>
+                            </>
+                          )}
+                          {option.pros && (
+                            <>
+                              <dt>Vantagens</dt>
+                              <dd>{option.pros}</dd>
+                            </>
+                          )}
+                          {option.cons && (
+                            <>
+                              <dt>Atenções</dt>
+                              <dd>{option.cons}</dd>
+                            </>
+                          )}
+                        </dl>
+                        {option.url && (
+                          <a
+                            className="source-link"
+                            href={option.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink /> Ver fonte
+                          </a>
+                        )}
+                        <div className="option-actions">
+                          <button
+                            className={option.chosen ? "selected" : ""}
+                            onClick={() => choose(option.id)}
+                          >
+                            {option.chosen ? (
+                              <>
+                                <CheckCircle2 /> Escolhida
+                              </>
+                            ) : (
+                              "Escolher"
+                            )}
+                          </button>
+                          <button onClick={() => schedule(option)}>
+                            <CalendarDays /> Levar ao roteiro
+                          </button>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -1368,14 +1410,18 @@ function Comparisons({ trip, update, open, schedule }) {
 }
 function Costs({ trip, edit }) {
   const events = trip.itinerary || [],
-    total = events.reduce((s, e) => s + Number(e.cost || 0), 0);
+    summary = summarizeCosts(events, trip.travelers),
+    total = summary.total.expected,
+    contingency = (total * (Number(trip.contingencyPercent) || 0)) / 100,
+    plannedWithReserve = total + contingency;
   const groups = Object.entries(TYPES)
     .map(([id, t]) => ({
       id,
       ...t,
-      total: events
-        .filter((e) => e.type === id)
-        .reduce((s, e) => s + Number(e.cost || 0), 0),
+      total: summarizeCosts(
+        events.filter((e) => e.type === id),
+        trip.travelers,
+      ).total.expected,
     }))
     .filter((x) => x.total);
   return (
@@ -1387,27 +1433,33 @@ function Costs({ trip, edit }) {
       <div className="cost-hero">
         <div>
           <small>TOTAL PLANEJADO</small>
-          <h2>{money(total)}</h2>
+          <h2>{money(total, trip.currency)}</h2>
+          <p>
+            Faixa {money(summary.total.min, trip.currency)} —{" "}
+            {money(summary.total.max, trip.currency)}
+          </p>
           <p>
             {trip.travelers || 1} viajante(s) ·{" "}
-            {money(total / (trip.travelers || 1))} por pessoa
+            {money(total / (trip.travelers || 1), trip.currency)} por pessoa
+            {contingency > 0 &&
+              ` · ${money(contingency, trip.currency)} de contingência`}
           </p>
         </div>
         {trip.budget > 0 && (
           <div>
             <small>TETO DEFINIDO</small>
-            <h3>{money(trip.budget)}</h3>
+            <h3>{money(trip.budget, trip.currency)}</h3>
             <div className="progress">
               <i
                 style={{
-                  width: `${Math.min(100, (total / trip.budget) * 100)}%`,
+                  width: `${Math.min(100, (plannedWithReserve / trip.budget) * 100)}%`,
                 }}
               />
             </div>
             <p>
-              {total > trip.budget
-                ? `${money(total - trip.budget)} acima do teto`
-                : `${money(trip.budget - total)} disponíveis`}
+              {plannedWithReserve > trip.budget
+                ? `${money(plannedWithReserve - trip.budget, trip.currency)} acima do teto com a reserva`
+                : `${money(trip.budget - plannedWithReserve, trip.currency)} disponíveis após a reserva`}
             </p>
           </div>
         )}
@@ -1419,7 +1471,7 @@ function Costs({ trip, edit }) {
               <TypeIcon type={g.id} />
               <div>
                 <span>{g.label}</span>
-                <strong>{money(g.total)}</strong>
+                <strong>{money(g.total, trip.currency)}</strong>
                 <small>
                   {Math.round((g.total / total) * 100)}% do previsto
                 </small>
@@ -1433,6 +1485,41 @@ function Costs({ trip, edit }) {
             text="Ao adicionar itens ao roteiro, informe os valores estimados."
           />
         )}
+      </div>
+      <h3 className="section-title">Composição do planejamento</h3>
+      <div className="cost-grid">
+        {Object.entries(summary.byClass).map(([kind, value]) => (
+          <Card key={kind}>
+            <div>
+              <span>
+                {kind === "fixed" ? "Custos fixos" : "Custos diários"}
+              </span>
+              <strong>{money(value, trip.currency)}</strong>
+            </div>
+          </Card>
+        ))}
+        {Object.entries(summary.byDay)
+          .filter(([day]) => day !== "Não informado")
+          .map(([day, value]) => (
+            <Card key={day}>
+              <div>
+                <span>{pretty(day)}</span>
+                <strong>{money(value, trip.currency)}</strong>
+                <small>Total do dia</small>
+              </div>
+            </Card>
+          ))}
+        {Object.entries(summary.byCity)
+          .filter(([city]) => city !== "Não informado")
+          .map(([city, value]) => (
+            <Card key={city}>
+              <div>
+                <span>{city}</span>
+                <strong>{money(value, trip.currency)}</strong>
+                <small>Total da cidade</small>
+              </div>
+            </Card>
+          ))}
       </div>
       <h3 className="section-title">Itens com custo</h3>
       <Card className="cost-list">
@@ -1448,7 +1535,9 @@ function Costs({ trip, edit }) {
                   {pretty(e.date)} · {TYPES[e.type]?.label}
                 </small>
               </div>
-              <strong>{money(e.cost)}</strong>
+              <strong>
+                {money(costRange(e, trip.travelers).expected, trip.currency)}
+              </strong>
               <ChevronRight />
             </button>
           ))}
@@ -1590,6 +1679,8 @@ function TripModal({ initial, onClose, onSave }) {
     end: initial?.end || "",
     travelers: initial?.travelers || 1,
     budget: initial?.budget || "",
+    currency: initial?.currency || "BRL",
+    contingencyPercent: initial?.contingencyPercent || 0,
   });
   const valid = f.name && f.destination && f.start && f.end && f.end >= f.start;
   return (
@@ -1627,6 +1718,34 @@ function TripModal({ initial, onClose, onSave }) {
               min={f.start}
               value={f.end}
               onChange={(e) => setF({ ...f, end: e.target.value })}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Moeda do planejamento
+            <select
+              value={f.currency}
+              onChange={(e) => setF({ ...f, currency: e.target.value })}
+            >
+              <option value="BRL">Real brasileiro (BRL)</option>
+              <option value="USD">Dólar americano (USD)</option>
+              <option value="EUR">Euro (EUR)</option>
+              <option value="GBP">Libra esterlina (GBP)</option>
+              <option value="ARS">Peso argentino (ARS)</option>
+              <option value="CLP">Peso chileno (CLP)</option>
+            </select>
+          </label>
+          <label>
+            Reserva de contingência (%)
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={f.contingencyPercent}
+              onChange={(e) =>
+                setF({ ...f, contingencyPercent: Number(e.target.value) })
+              }
             />
           </label>
         </div>
@@ -1791,6 +1910,14 @@ function EventModal({ trip, initial, onClose, onSave }) {
       time: "09:00",
       duration: "",
       cost: "",
+      costMin: "",
+      costMax: "",
+      costCurrency: trip.currency || "BRL",
+      exchangeRate: 1,
+      quoteDate: "",
+      costScope: "group",
+      costClass: "daily",
+      city: "",
       booking: "",
       link: "",
       notes: "",
@@ -1892,13 +2019,100 @@ function EventModal({ trip, initial, onClose, onSave }) {
             />
           </label>
           <label>
-            Custo previsto total
+            Custo esperado
             <input
               type="number"
               min="0"
               value={f.cost || ""}
               onChange={(e) => set("cost", e.target.value)}
               placeholder="0"
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Estimativa mínima
+            <input
+              type="number"
+              min="0"
+              value={f.costMin ?? ""}
+              onChange={(e) => set("costMin", e.target.value)}
+              placeholder={f.cost || "0"}
+            />
+          </label>
+          <label>
+            Estimativa máxima
+            <input
+              type="number"
+              min="0"
+              value={f.costMax ?? ""}
+              onChange={(e) => set("costMax", e.target.value)}
+              placeholder={f.cost || "0"}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Moeda original
+            <select
+              value={f.costCurrency || trip.currency}
+              onChange={(e) => set("costCurrency", e.target.value)}
+            >
+              {[trip.currency, "BRL", "USD", "EUR", "GBP", "ARS", "CLP"]
+                .filter((x, i, a) => a.indexOf(x) === i)
+                .map((currency) => (
+                  <option key={currency}>{currency}</option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Cotação para {trip.currency}
+            <input
+              type="number"
+              min="0"
+              step="0.0001"
+              value={f.exchangeRate ?? 1}
+              onChange={(e) => set("exchangeRate", e.target.value)}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Data da cotação
+            <input
+              type="date"
+              value={f.quoteDate || ""}
+              onChange={(e) => set("quoteDate", e.target.value)}
+            />
+          </label>
+          <label>
+            Abrangência
+            <select
+              value={f.costScope || "group"}
+              onChange={(e) => set("costScope", e.target.value)}
+            >
+              <option value="group">Total do grupo</option>
+              <option value="person">Por pessoa</option>
+            </select>
+          </label>
+        </div>
+        <div>
+          <label>
+            Tipo de custo
+            <select
+              value={f.costClass || "daily"}
+              onChange={(e) => set("costClass", e.target.value)}
+            >
+              <option value="daily">Custo diário</option>
+              <option value="fixed">Custo fixo da viagem</option>
+            </select>
+          </label>
+          <label>
+            Cidade
+            <input
+              value={f.city || ""}
+              onChange={(e) => set("city", e.target.value)}
+              placeholder="Buenos Aires"
             />
           </label>
         </div>
@@ -1934,6 +2148,11 @@ function EventModal({ trip, initial, onClose, onSave }) {
             onSave({
               ...f,
               cost: Number(f.cost) || 0,
+              costMin:
+                f.costMin === "" ? Number(f.cost) || 0 : Number(f.costMin),
+              costMax:
+                f.costMax === "" ? Number(f.cost) || 0 : Number(f.costMax),
+              exchangeRate: Number(f.exchangeRate) || 1,
               duration: Number(f.duration) || 0,
             })
           }
@@ -2077,7 +2296,13 @@ function OptionModal({ onClose, onSave }) {
       nights: "",
       duration: "",
       price: "",
-      currency: "BRL",
+      costMin: "",
+      costMax: "",
+      costCurrency: "BRL",
+      exchangeRate: 1,
+      quoteDate: new Date().toISOString().slice(0, 10),
+      costScope: "group",
+      costClass: "fixed",
       cancellation: "",
       baggage: "",
       pros: "",
@@ -2118,6 +2343,71 @@ function OptionModal({ onClose, onSave }) {
               onChange={(e) => set("price", e.target.value)}
               placeholder="0"
             />
+          </label>
+        </div>
+        <div>
+          <label>
+            Preço mínimo
+            <input
+              type="number"
+              min="0"
+              value={f.costMin}
+              onChange={(e) => set("costMin", e.target.value)}
+              placeholder={f.price || "0"}
+            />
+          </label>
+          <label>
+            Preço máximo
+            <input
+              type="number"
+              min="0"
+              value={f.costMax}
+              onChange={(e) => set("costMax", e.target.value)}
+              placeholder={f.price || "0"}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Moeda original
+            <select
+              value={f.costCurrency}
+              onChange={(e) => set("costCurrency", e.target.value)}
+            >
+              {["BRL", "USD", "EUR", "GBP", "ARS", "CLP"].map((currency) => (
+                <option key={currency}>{currency}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Cotação para a moeda da viagem
+            <input
+              type="number"
+              min="0"
+              step="0.0001"
+              value={f.exchangeRate}
+              onChange={(e) => set("exchangeRate", e.target.value)}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Data da consulta
+            <input
+              type="date"
+              value={f.quoteDate}
+              onChange={(e) => set("quoteDate", e.target.value)}
+            />
+          </label>
+          <label>
+            Preço informado
+            <select
+              value={f.costScope}
+              onChange={(e) => set("costScope", e.target.value)}
+            >
+              <option value="group">Total do grupo</option>
+              <option value="person">Por pessoa</option>
+            </select>
           </label>
         </div>
         {f.kind === "transporte" && (
@@ -2277,6 +2567,11 @@ function OptionModal({ onClose, onSave }) {
             onSave({
               ...f,
               price: Number(f.price) || 0,
+              costMin:
+                f.costMin === "" ? Number(f.price) || 0 : Number(f.costMin),
+              costMax:
+                f.costMax === "" ? Number(f.price) || 0 : Number(f.costMax),
+              exchangeRate: Number(f.exchangeRate) || 1,
               stops: f.stops === "" ? "" : Number(f.stops),
               nights: Number(f.nights) || 0,
               duration: Number(f.duration) || 0,

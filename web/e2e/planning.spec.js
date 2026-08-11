@@ -135,6 +135,8 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
       .fill("Hospedagem no Rio");
     await page.getByLabel("Modalidade").selectOption("hospedagem");
     await page.getByLabel("Preço total previsto").fill(String(price));
+    await page.getByLabel("Preço mínimo").fill(String(price - 100));
+    await page.getByLabel("Preço máximo").fill(String(price + 100));
     await page.getByLabel("Nome da opção").fill(title);
     await page.getByLabel("Tipo de quarto").fill(room);
     await page.getByLabel("Número de diárias").fill(String(nights));
@@ -145,8 +147,13 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
     .locator('xpath=ancestor::section[contains(@class,"option-card")]');
   await expect(chosenCard.getByText("Menor preço")).toBeVisible();
   await expect(chosenCard.getByText("Quarto duplo")).toBeVisible();
+  await expect(
+    chosenCard.getByText(/R\$\s*800,00 a R\$\s*1\.000,00/),
+  ).toBeVisible();
   await expect(chosenCard.getByText("Diárias", { exact: true })).toBeVisible();
-  await expect(chosenCard.locator("dd").getByText("2", { exact: true })).toBeVisible();
+  await expect(
+    chosenCard.locator("dd").getByText("2", { exact: true }),
+  ).toBeVisible();
   await chosenCard.getByRole("button", { name: "Escolher" }).click();
   await expect(
     chosenCard.getByRole("button", { name: "Escolhida" }),
@@ -156,5 +163,9 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
   await page.getByRole("button", { name: "Roteiro", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Hotel Centro" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Custos previstos" }).click();
+  await expect(
+    page.getByText(/Faixa R\$\s*800,00 — R\$\s*1\.000,00/),
   ).toBeVisible();
 });

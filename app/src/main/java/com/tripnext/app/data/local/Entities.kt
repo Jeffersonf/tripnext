@@ -24,7 +24,8 @@ data class TripEntity(
     val isActive: Boolean = false,
     val archived: Boolean = false,
     val travelers: Int = 1,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val contingencyPercent: Int = 0
 )
 
 @Entity(tableName = "expenses", indices = [Index("tripId")])
@@ -50,13 +51,13 @@ data class CategoryBudgetEntity(val tripId: String, val category: ExpenseCategor
 data class SavingsGoalEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val targetMinor: Long, val savedMinor: Long = 0, val targetDate: Long)
 
 @Entity(tableName = "itinerary_events", indices = [Index("tripId")])
-data class ItineraryEventEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType, val startsAt: Long, val endsAt: Long? = null, val location: String = "", val notes: String = "", val sortOrder: Int = 0, val planningStatus: String = "RESEARCHING", val estimatedCostMinor: Long = 0, val bookingCode: String = "", val sourceUrl: String = "", val latitude: Double? = null, val longitude: Double? = null, val placeId: String = "")
+data class ItineraryEventEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType, val startsAt: Long, val endsAt: Long? = null, val location: String = "", val notes: String = "", val sortOrder: Int = 0, val planningStatus: String = "RESEARCHING", val estimatedCostMinor: Long = 0, val bookingCode: String = "", val sourceUrl: String = "", val latitude: Double? = null, val longitude: Double? = null, val placeId: String = "", val estimatedMinMinor: Long = estimatedCostMinor, val estimatedMaxMinor: Long = estimatedCostMinor, val costCurrency: String = "BRL", val exchangeRate: Double = 1.0, val quoteDate: Long? = null, val costScope: String = "GROUP", val costClass: String = "DAILY", val city: String = "")
 
 @Entity(tableName = "trip_ideas", indices = [Index("tripId")])
 data class TripIdeaEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType = ItineraryType.ACTIVITY, val location: String = "", val notes: String = "", val estimatedCostMinor: Long = 0, val sourceUrl: String = "", val createdAt: Long = System.currentTimeMillis(), val latitude: Double? = null, val longitude: Double? = null, val placeId: String = "")
 
 @Entity(tableName = "trip_options", indices = [Index("tripId"), Index(value = ["tripId", "decisionGroup"])])
-data class TripOptionEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val decisionGroup: String, val title: String, val type: ItineraryType, val provider: String = "", val location: String = "", val estimatedCostMinor: Long = 0, val currency: String = "BRL", val cancellationPolicy: String = "", val inclusions: String = "", val pros: String = "", val cons: String = "", val sourceUrl: String = "", val chosen: Boolean = false, val observedAt: Long = System.currentTimeMillis(), val origin: String = "", val destination: String = "", val departsAt: Long? = null, val arrivesAt: Long? = null, val stopCount: Int = 0, val roomType: String = "", val nightCount: Int = 0, val durationMinutes: Int = 0)
+data class TripOptionEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val decisionGroup: String, val title: String, val type: ItineraryType, val provider: String = "", val location: String = "", val estimatedCostMinor: Long = 0, val currency: String = "BRL", val cancellationPolicy: String = "", val inclusions: String = "", val pros: String = "", val cons: String = "", val sourceUrl: String = "", val chosen: Boolean = false, val observedAt: Long = System.currentTimeMillis(), val origin: String = "", val destination: String = "", val departsAt: Long? = null, val arrivesAt: Long? = null, val stopCount: Int = 0, val roomType: String = "", val nightCount: Int = 0, val durationMinutes: Int = 0, val estimatedMinMinor: Long = estimatedCostMinor, val estimatedMaxMinor: Long = estimatedCostMinor, val exchangeRate: Double = 1.0, val quoteDate: Long? = null, val costScope: String = "GROUP", val costClass: String = "FIXED")
 
 @Entity(tableName = "installment_reservations", indices = [Index("tripId")])
 data class InstallmentReservationEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ReservationType, val totalMinor: Long, val installmentCount: Int, val firstDueDate: Long, val intervalMonths: Int = 1)

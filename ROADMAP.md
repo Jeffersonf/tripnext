@@ -125,14 +125,14 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 
 ### Custos previstos
 
-- [ ] Moeda da viagem e moeda original por item.
-- [ ] Conversão com cotação e data de referência.
-- [ ] Custo por pessoa versus custo do grupo.
-- [ ] Faixa de preço mínimo/esperado/máximo.
+- [x] Moeda da viagem e moeda original por item.
+- [x] Conversão manual com cotação e data de referência, sem apresentar câmbio antigo como atual.
+- [x] Custo por pessoa versus custo do grupo.
+- [x] Faixa de preço mínimo/esperado/máximo.
 - [x] Alternativas comparáveis antes da decisão.
-- [ ] Custos fixos separados dos custos diários.
-- [ ] Total por dia, cidade, categoria e viajante.
-- [ ] Reserva de contingência configurável.
+- [x] Custos fixos separados dos custos diários.
+- [ ] Total por dia, cidade, categoria e viajante: dia, cidade, categoria e média por pessoa concluídos; falta atribuição nominal por viajante.
+- [x] Reserva de contingência configurável.
 
 ### Critérios de aceite da fase
 
@@ -450,15 +450,15 @@ Critérios de aceite:
 
 Ordem exata de implementação:
 
-1. [ ] Adicionar moeda original, moeda da viagem e data da cotação.
-2. [ ] Separar preço mínimo, esperado e máximo.
-3. [ ] Marcar custo como individual ou do grupo e calcular por viajante.
-4. [ ] Separar custos fixos dos custos por dia.
-5. [ ] Exibir totais por dia, cidade, categoria e viajante.
-6. [ ] Adicionar contingência configurável ao orçamento previsto.
+1. [x] Adicionar moeda original, moeda da viagem e data da cotação.
+2. [x] Separar preço mínimo, esperado e máximo.
+3. [x] Marcar custo como individual ou do grupo e calcular por pessoa.
+4. [x] Separar custos fixos dos custos por dia.
+5. [ ] Exibir totais por viajante nominal; totais por dia, cidade e categoria já estão disponíveis.
+6. [x] Adicionar contingência configurável ao orçamento previsto.
 7. [ ] Criar lembrete de prazo para reserva/cancelamento.
 8. [ ] Manter histórico de preço informado pelo usuário ou por provedor permitido.
-9. [ ] Cobrir cálculos e migrações com testes unitários e E2E.
+9. [x] Cobrir cálculos e migração web com testes unitários e E2E; teste instrumentado de migração Room permanece na seção de qualidade.
 
 ### Definição de pronto do M3.2
 
@@ -483,6 +483,9 @@ Ordem exata de implementação:
 | 2026-08-11 | `npm test` | **PASS** — 10 testes de migração, planejamento, rotas e comparação |
 | 2026-08-11 | `npm run test:e2e` | **PASS** — 3 jornadas completas em Chromium, incluindo comparação e agendamento |
 | 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 12 testes JVM, Room v5 e APK debug gerado |
+| 2026-08-11 | `npm test` | **PASS** — 12 testes, incluindo conversão, faixa e dimensões de custo |
+| 2026-08-11 | `npm run test:e2e` | **PASS** — comparação com faixa de preço convertida até o resumo de custos |
+| 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 14 testes JVM, Room v6 e APK debug gerado |
 
 ## Princípios permanentes
 

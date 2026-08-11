@@ -6,7 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 5, exportSchema = true)
+@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 6, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class TripNextDatabase : RoomDatabase() {
     abstract fun tripDao(): TripDao
@@ -52,6 +52,27 @@ abstract class TripNextDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE trip_options ADD COLUMN roomType TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE trip_options ADD COLUMN nightCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE trip_options ADD COLUMN durationMinutes INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trips ADD COLUMN contingencyPercent INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN estimatedMinMinor INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN estimatedMaxMinor INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN costCurrency TEXT NOT NULL DEFAULT 'BRL'")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN exchangeRate REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN quoteDate INTEGER")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN costScope TEXT NOT NULL DEFAULT 'GROUP'")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN costClass TEXT NOT NULL DEFAULT 'DAILY'")
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE itinerary_events SET estimatedMinMinor = estimatedCostMinor, estimatedMaxMinor = estimatedCostMinor")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN estimatedMinMinor INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN estimatedMaxMinor INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN exchangeRate REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN quoteDate INTEGER")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN costScope TEXT NOT NULL DEFAULT 'GROUP'")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN costClass TEXT NOT NULL DEFAULT 'FIXED'")
+                db.execSQL("UPDATE trip_options SET estimatedMinMinor = estimatedCostMinor, estimatedMaxMinor = estimatedCostMinor")
             }
         }
     }
