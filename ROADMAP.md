@@ -91,6 +91,16 @@ Métricas auxiliares:
 - [x] Widget e atalho de captura.
 - [x] Testes JVM de orçamento, rateio e parcelamento.
 
+### Backend existente
+
+- [x] API Express com PostgreSQL e migrations versionadas.
+- [x] Cadastro, login, token com expiração e `/api/me`.
+- [x] Viagens isoladas por usuário e papel de acesso.
+- [x] Push/pull local-first com idempotência, versão, conflito e tombstone.
+- [x] Contrato OpenAPI e testes em memória e PostgreSQL real no CI.
+- [ ] Clientes web e Android conectados ao backend.
+- [ ] Gemini removido dos clientes e protegido no servidor.
+
 ---
 
 ## Fase 1 — Planejador diário realmente utilizável (P0)
@@ -450,13 +460,13 @@ Critérios de aceite:
 
 Ordem exata de implementação:
 
-1. [ ] Criar API própria e banco PostgreSQL com migrations versionadas.
-2. [ ] Implementar sessão segura e endpoints `/api/me` e `/api/trips`.
+1. [x] Criar API própria e banco PostgreSQL com migrations versionadas.
+2. [x] Implementar sessão segura e endpoints `/api/me` e `/api/trips`.
 3. [ ] Sincronizar viagens, participantes, roteiro, alternativas e checklist.
-4. [ ] Usar idempotency keys e tombstones para fila offline.
+4. [x] Usar idempotency keys e tombstones para fila offline no servidor; integração dos clientes permanece no item 3.
 5. [ ] Definir resolução de conflito e mostrar estado de sincronização.
 6. [ ] Remover a chave Gemini dos clientes e chamar IA apenas pelo backend.
-7. [ ] Adicionar contratos OpenAPI e testes cliente/servidor.
+7. [x] Adicionar contrato OpenAPI e testes do servidor; testes de contrato dos clientes entram junto da integração.
 8. [ ] Publicar ambientes de homologação e produção com segredos gerenciados.
 9. [ ] Validar a mesma viagem no web e Android após edição offline.
 

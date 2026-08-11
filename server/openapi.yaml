@@ -1,0 +1,133 @@
+openapi: 3.1.0
+info:
+  title: TripNext API
+  version: 0.1.0
+  description: API local-first para autenticação, viagens e sincronização idempotente.
+servers:
+  - url: http://localhost:8787
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200": { description: Servidor disponível }
+  /api/auth/register:
+    post:
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterInput" }
+      responses:
+        "201": { $ref: "#/components/responses/AuthResponse" }
+        "409": { description: E-mail já cadastrado }
+  /api/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200": { $ref: "#/components/responses/AuthResponse" }
+        "401": { description: Credenciais inválidas }
+  /api/me:
+    get:
+      operationId: me
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Perfil atual
+          content: { application/json: { schema: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } } } }
+  /api/trips:
+    get:
+      operationId: listTrips
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Viagens acessíveis ao usuário }
+    post:
+      operationId: createTrip
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TripWrite" } } }
+      responses:
+        "201": { description: Viagem criada }
+  /api/trips/{tripId}:
+    patch:
+      operationId: updateTrip
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: tripId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [data], properties: { baseVersion: { type: integer }, data: { type: object, additionalProperties: true } } } } }
+      responses:
+        "200": { description: Viagem atualizada }
+        "409": { description: Conflito de versão }
+  /api/sync/push:
+    post:
+      operationId: syncPush
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operations]
+              properties:
+                operations: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/SyncOperation" } }
+      responses:
+        "200": { description: Resultado individual de cada mutação }
+  /api/sync/pull:
+    get:
+      operationId: syncPull
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: cursor, in: query, schema: { type: integer, minimum: 0 } }
+        - { name: tripId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Mudanças ordenadas e novo cursor }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    RegisterInput:
+      type: object
+      required: [name, email, password]
+      properties: { name: { type: string, minLength: 2 }, email: { type: string, format: email }, password: { type: string, minLength: 10 } }
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties: { email: { type: string, format: email }, password: { type: string } }
+    User:
+      type: object
+      required: [id, name, email]
+      properties: { id: { type: string, format: uuid }, name: { type: string }, email: { type: string, format: email }, createdAt: { type: string, format: date-time } }
+    TripWrite:
+      type: object
+      required: [data]
+      properties: { id: { type: string, format: uuid }, data: { type: object, required: [name], additionalProperties: true } }
+    SyncOperation:
+      type: object
+      required: [mutationId, tripId, entityType, entityId]
+      properties:
+        mutationId: { type: string, format: uuid }
+        tripId: { type: string, format: uuid }
+        entityType: { type: string, minLength: 1 }
+        entityId: { type: string, minLength: 1 }
+        baseVersion: { type: integer, minimum: 0 }
+        deleted: { type: boolean, default: false }
+        payload: { type: object, additionalProperties: true }
+  responses:
+    AuthResponse:
+      description: Sessão criada
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [user, token]
+            properties: { user: { $ref: "#/components/schemas/User" }, token: { type: string } }

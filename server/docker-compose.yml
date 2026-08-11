@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tripnext
+      POSTGRES_USER: tripnext
+      POSTGRES_PASSWORD: tripnext
+    ports: ["5432:5432"]
+    volumes: ["tripnext_postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripnext"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: .
+    environment:
+      PORT: 8787
+      DATABASE_URL: postgres://tripnext:tripnext@postgres:5432/tripnext
+      AUTH_SECRET: local-only-change-before-production-123456789
+      APP_ORIGINS: http://localhost:5173
+    ports: ["8787:8787"]
+    depends_on:
+      postgres: { condition: service_healthy }
+volumes:
+  tripnext_postgres:

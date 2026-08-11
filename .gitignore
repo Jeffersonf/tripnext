@@ -8,6 +8,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 node_modules/
+.env
+server/.env
 web/dist/
 web/test-results/
 web/playwright-report/

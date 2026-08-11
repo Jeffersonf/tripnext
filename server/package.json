@@ -1,0 +1,23 @@
+{
+  "name": "tripnext-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "migrate": "node src/migrate.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.0"
+  }
+}

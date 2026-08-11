@@ -1,0 +1,84 @@
+import express from "express";
+import helmet from "helmet";
+import { authMiddleware, hashPassword, signToken, verifyPassword } from "./auth.js";
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt });
+const badRequest = (response, details) => response.status(400).json({ error: "validation_error", details });
+
+export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowedOrigins = [] }) {
+  if (!authSecret || authSecret.length < 32) throw new Error("AUTH_SECRET must contain at least 32 characters");
+  const app = express();
+  app.disable("x-powered-by");
+  app.use(helmet());
+  app.use((request, response, next) => {
+    const origin = request.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+      response.setHeader("Access-Control-Allow-Origin", origin);
+      response.setHeader("Vary", "Origin");
+      response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key");
+      response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    }
+    if (request.method === "OPTIONS") return allowedOrigins.includes(origin) ? response.sendStatus(204) : response.sendStatus(403);
+    next();
+  });
+  app.use(express.json({ limit: "1mb" }));
+
+  app.get("/health", (_request, response) => response.json({ status: "ok" }));
+  app.post("/api/auth/register", async (request, response, next) => {
+    try {
+      const email = String(request.body?.email || "").trim().toLowerCase(), name = String(request.body?.name || "").trim(), password = String(request.body?.password || "");
+      if (!emailPattern.test(email) || name.length < 2 || password.length < 10) return badRequest(response, "email, name and password (10+ characters) are required");
+      const user = await store.createUser({ email, name, passwordHash: await hashPassword(password) });
+      response.status(201).json({ user: publicUser(user), token: signToken(user, authSecret, tokenTtlSeconds) });
+    } catch (error) { if (error.code === "email_exists") return response.status(409).json({ error: "email_exists" }); next(error); }
+  });
+  app.post("/api/auth/login", async (request, response, next) => {
+    try {
+      const email = String(request.body?.email || "").trim().toLowerCase(), password = String(request.body?.password || ""), user = await store.userByEmail(email);
+      if (!user || !(await verifyPassword(password, user.passwordHash))) return response.status(401).json({ error: "invalid_credentials" });
+      response.json({ user: publicUser(user), token: signToken(user, authSecret, tokenTtlSeconds) });
+    } catch (error) { next(error); }
+  });
+
+  const authenticate = authMiddleware(authSecret);
+  app.get("/api/me", authenticate, async (request, response) => { const user = await store.userById(request.auth.sub); response.json({ user: publicUser(user) }); });
+  app.get("/api/trips", authenticate, async (request, response) => response.json({ trips: await store.listTrips(request.auth.sub) }));
+  app.post("/api/trips", authenticate, async (request, response, next) => {
+    try {
+      if (request.body?.id && !uuidPattern.test(request.body.id)) return badRequest(response, "id must be UUID");
+      const data = request.body?.data;
+      if (!data || typeof data !== "object" || !String(data.name || "").trim()) return badRequest(response, "data.name is required");
+      response.status(201).json({ trip: await store.createTrip(request.auth.sub, { id: request.body.id, data }) });
+    } catch (error) { if (error.code === "trip_exists") return response.status(409).json({ error: "trip_exists" }); next(error); }
+  });
+  app.patch("/api/trips/:tripId", authenticate, async (request, response, next) => {
+    try {
+      const role = await store.tripRole(request.auth.sub, request.params.tripId);
+      if (!role) return response.status(404).json({ error: "trip_not_found" });
+      if (["VIEWER", "GUEST"].includes(role)) return response.status(403).json({ error: "forbidden" });
+      const trip = await store.updateTrip(request.auth.sub, request.params.tripId, request.body?.data || {}, request.body?.baseVersion);
+      response.json({ trip });
+    } catch (error) { if (error.code === "version_conflict") return response.status(409).json({ error: "version_conflict", current: error.current }); next(error); }
+  });
+  app.post("/api/sync/push", authenticate, async (request, response, next) => {
+    try {
+      const operations = request.body?.operations;
+      if (!Array.isArray(operations) || operations.length > 500) return badRequest(response, "operations must be an array with at most 500 items");
+      for (const operation of operations) if (!uuidPattern.test(String(operation.mutationId || "")) || !uuidPattern.test(String(operation.tripId || "")) || !operation.entityType || !operation.entityId || (!operation.deleted && (operation.payload == null || typeof operation.payload !== "object"))) return badRequest(response, "each operation requires UUID mutationId/tripId, entityType, entityId and payload or deleted=true");
+      response.json({ results: await store.push(request.auth.sub, operations) });
+    } catch (error) { next(error); }
+  });
+  app.get("/api/sync/pull", authenticate, async (request, response, next) => {
+    try {
+      const cursor = Math.max(0, Number(request.query.cursor) || 0), tripId = request.query.tripId ? String(request.query.tripId) : null;
+      if (tripId && !uuidPattern.test(tripId)) return badRequest(response, "tripId must be UUID");
+      response.json(await store.pull(request.auth.sub, cursor, tripId));
+    } catch (error) { next(error); }
+  });
+
+  app.use((_request, response) => response.status(404).json({ error: "not_found" }));
+  app.use((error, _request, response, _next) => { console.error(error); response.status(500).json({ error: "internal_error" }); });
+  return app;
+}
