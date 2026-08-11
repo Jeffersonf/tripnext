@@ -3,7 +3,9 @@ import {test,expect} from '@playwright/test';
 test.beforeEach(async({page})=>{await page.addInitScript(()=>localStorage.clear());await page.goto('./');});
 
 test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
-  await page.route('https://nominatim.openstreetmap.org/search?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify([{osm_type:'node',osm_id:123,display_name:'MALBA, Palermo, Buenos Aires, Argentina',lat:'-34.5764',lon:'-58.4033',type:'museum'}])}));
+  let geocodeCount=0;
+  await page.route('https://nominatim.openstreetmap.org/search?**',route=>{const cafe=geocodeCount++>0;return route.fulfill({contentType:'application/json',body:JSON.stringify([{osm_type:'node',osm_id:cafe?456:123,display_name:cafe?'Café Palermo, Buenos Aires, Argentina':'MALBA, Palermo, Buenos Aires, Argentina',lat:cafe?'-34.5810':'-34.5764',lon:cafe?'-58.4210':'-58.4033',type:cafe?'cafe':'museum'}])})});
+  await page.route('https://router.project-osrm.org/route/v1/driving/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({code:'Ok',routes:[{distance:2400,duration:420,geometry:{coordinates:[[-58.4033,-34.5764],[-58.4120,-34.5790],[-58.4210,-34.5810]]},legs:[{distance:2400,duration:420}]}]})}));
   await page.getByRole('button',{name:'Começar a planejar'}).click();
   await page.getByLabel('Nome do plano').fill('Buenos Aires em família');
   await page.getByLabel('Para onde você vai?').fill('Buenos Aires, Argentina');
@@ -25,6 +27,16 @@ test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();
   await expect(page.getByText(/75,00/)).toBeVisible();
   await expect(page.locator('.leaflet-container')).toBeVisible();
+  await page.getByRole('button',{name:'Adicionar',exact:true}).click();
+  await page.getByLabel('O que está planejando?').fill('Café da tarde');
+  await page.getByLabel('Local / endereço').fill('Café Palermo');
+  await page.waitForTimeout(1200);
+  await page.getByRole('button',{name:'Buscar lugar'}).click();
+  await page.getByRole('button',{name:/Café Palermo/}).click();
+  await page.getByRole('button',{name:'Adicionar ao plano'}).click();
+  await page.getByRole('button',{name:'Carro'}).click();
+  await page.getByRole('button',{name:'Calcular rota real'}).click();
+  await expect(page.getByText(/Rota viária OSRM/)).toBeVisible();
   await page.getByRole('button',{name:'Duplicar dia'}).click();
   await page.getByRole('button',{name:'Duplicar planejamento'}).click();
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();

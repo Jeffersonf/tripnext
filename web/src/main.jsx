@@ -54,6 +54,8 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./map.css";
 import "./routes.css";
+import "./route-provider.css";
+import { fetchDrivingRoute } from "./routeProvider.js";
 
 const TYPES = {
   transporte: { label: "Transporte", icon: Train, color: "#2563eb" },
@@ -587,10 +589,28 @@ function TypeIcon({ type }) {
 }
 function TripMap({ events }) {
   const [mode, setMode] = useState("walking");
+  const [roadRoute, setRoadRoute] = useState(null),
+    [routeLoading, setRouteLoading] = useState(false),
+    [routeError, setRouteError] = useState("");
   const located = events.filter(
       (e) => Number.isFinite(e.latitude) && Number.isFinite(e.longitude),
     ),
-    legs = buildRouteLegs(events, mode);
+    estimatedLegs = buildRouteLegs(events, mode),
+    legs =
+      mode === "driving" && roadRoute
+        ? estimatedLegs.map((leg, index) => ({
+            ...leg,
+            ...roadRoute.legs[index],
+            real: true,
+          }))
+        : estimatedLegs;
+  const coordinateSignature = located
+    .map((e) => `${e.id}:${e.latitude},${e.longitude}`)
+    .join(";");
+  useEffect(() => {
+    setRoadRoute(null);
+    setRouteError("");
+  }, [coordinateSignature]);
   if (!located.length)
     return (
       <div className="map-empty">
@@ -604,6 +624,17 @@ function TripMap({ events }) {
       </div>
     );
   const positions = located.map((e) => [e.latitude, e.longitude]);
+  const calculateRoadRoute = async () => {
+    setRouteLoading(true);
+    setRouteError("");
+    try {
+      setRoadRoute(await fetchDrivingRoute(located));
+    } catch (error) {
+      setRouteError(error.message);
+    } finally {
+      setRouteLoading(false);
+    }
+  };
   return (
     <section className="map-section">
       <div className="map-toolbar">
@@ -623,8 +654,27 @@ function TripMap({ events }) {
               {label}
             </button>
           ))}
+          {mode === "driving" && located.length > 1 && (
+            <button
+              className="route-action"
+              disabled={routeLoading}
+              onClick={calculateRoadRoute}
+            >
+              {routeLoading
+                ? "Calculando…"
+                : roadRoute
+                  ? "Atualizar rota"
+                  : "Calcular rota real"}
+            </button>
+          )}
         </div>
       </div>
+      {routeError && (
+        <div className="route-error">
+          <AlertTriangle />
+          {routeError} Usando estimativa local.
+        </div>
+      )}
       <div className="trip-map">
         <MapContainer
           key={positions.map((p) => p.join(",")).join(";")}
@@ -636,10 +686,18 @@ function TripMap({ events }) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {positions.length > 1 && (
+          {(roadRoute?.geometry?.length || positions.length > 1) && (
             <Polyline
-              positions={positions}
-              pathOptions={{ color: "#3f7d00", weight: 3, dashArray: "7 7" }}
+              positions={
+                mode === "driving" && roadRoute?.geometry?.length
+                  ? roadRoute.geometry
+                  : positions
+              }
+              pathOptions={{
+                color: "#3f7d00",
+                weight: 3,
+                dashArray: mode === "driving" && roadRoute ? undefined : "7 7",
+              }}
             />
           )}
           {located.map((event, index) => (
@@ -663,7 +721,9 @@ function TripMap({ events }) {
           ))}
         </MapContainer>
         <span className="map-note">
-          Linha indica a ordem, não a rota viária.
+          {mode === "driving" && roadRoute
+            ? `Rota viária ${roadRoute.provider} · ${roadRoute.distanceKm.toFixed(1)} km · ${roadRoute.durationMinutes} min`
+            : "Linha indica a ordem, não a rota viária."}
         </span>
       </div>
       {legs.length > 0 && (
@@ -676,15 +736,18 @@ function TripMap({ events }) {
                   {leg.fromTitle} → {leg.toTitle}
                 </b>
                 <small>
-                  {leg.distanceKm.toFixed(1)} km em linha reta · cerca de{" "}
-                  {leg.durationMinutes} min*
+                  {leg.distanceKm.toFixed(1)} km{" "}
+                  {leg.real ? "pela rota" : "em linha reta"} ·{" "}
+                  {leg.real ? "" : "cerca de "}
+                  {leg.durationMinutes} min{leg.real ? "" : "*"}
                 </small>
               </span>
             </div>
           ))}
           <p>
-            *Estimativa inicial. A rota real será integrada ao provedor de
-            direções.
+            {mode === "driving" && roadRoute
+              ? `Rota calculada por ${roadRoute.provider} em ${new Date(roadRoute.fetchedAt).toLocaleString("pt-BR")}.`
+              : "*Estimativa inicial; confirme no aplicativo de navegação antes de sair."}
           </p>
         </div>
       )}
