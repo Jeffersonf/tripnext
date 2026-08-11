@@ -102,7 +102,7 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 - [ ] Arrastar e soltar itens dentro do dia.
 - [ ] Mover um item para outro dia.
 - [ ] Duplicar item e duplicar um dia inteiro.
-- [ ] Itens sem data em uma caixa de ideias.
+- [x] Itens sem data em uma caixa de ideias.
 - [ ] Blocos manhã, tarde e noite, além de horário exato.
 - [ ] Duração estimada e intervalo entre atividades.
 - [ ] Detectar choque de horários.
@@ -444,10 +444,10 @@ Critérios de aceite:
 
 Ordem exata de implementação:
 
-1. Migrar `localStorage` de uma viagem única para coleção versionada de viagens.
-2. Criar seletor de viagem ativa, arquivar, duplicar e excluir.
-3. Criar caixa de ideias sem data.
-4. Permitir mover uma ideia para um dia.
+1. [x] Migrar `localStorage` de uma viagem única para coleção versionada de viagens.
+2. [x] Criar seletor de viagem ativa, arquivar, duplicar e excluir.
+3. [x] Criar caixa de ideias sem data.
+4. [x] Permitir mover uma ideia para um dia.
 5. Implementar drag-and-drop e persistir `sortOrder`.
 6. Adicionar blocos manhã/tarde/noite e detecção de choque.
 7. Adicionar opção de “tempo livre intencional”.
