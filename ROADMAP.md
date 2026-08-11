@@ -120,8 +120,8 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 - [x] Exibir distância geodésica e duração inicial estimada entre paradas, claramente identificadas como aproximação.
 - [x] Modos a pé, carro, bicicleta e transporte público para estimativa inicial.
 - [x] Rota viária real sob demanda para carro, com geometria, distância, duração, cache e fallback local.
-- [ ] Abrir o trecho no Google Maps, Apple Maps ou Waze.
-- [ ] Alertar quando o roteiro exigir deslocamento inviável.
+- [x] Abrir cada trecho no Google Maps com origem, destino e modo de viagem.
+- [x] Alertar quando o intervalo entre atividades não comportar o deslocamento estimado/real.
 
 ### Custos previstos
 

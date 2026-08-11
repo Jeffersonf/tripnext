@@ -43,6 +43,7 @@ import {
   movePlanItem,
   dayPart,
   buildRouteLegs,
+  findTightRouteLegs,
 } from "./planner.js";
 import {
   MapContainer,
@@ -55,6 +56,7 @@ import "leaflet/dist/leaflet.css";
 import "./map.css";
 import "./routes.css";
 import "./route-provider.css";
+import "./logistics.css";
 import { fetchDrivingRoute } from "./routeProvider.js";
 
 const TYPES = {
@@ -604,6 +606,8 @@ function TripMap({ events }) {
             real: true,
           }))
         : estimatedLegs;
+  const tightLegs = findTightRouteLegs(events, legs),
+    tightLegIds = new Set(tightLegs.map((leg) => `${leg.fromId}-${leg.toId}`));
   const coordinateSignature = located
     .map((e) => `${e.id}:${e.latitude},${e.longitude}`)
     .join(";");
@@ -675,6 +679,22 @@ function TripMap({ events }) {
           {routeError} Usando estimativa local.
         </div>
       )}
+      {tightLegs.length > 0 && (
+        <div className="route-warning">
+          <AlertTriangle />
+          <div>
+            <b>O horário pode não fechar</b>
+            <span>
+              {tightLegs
+                .map(
+                  (leg) =>
+                    `${leg.fromTitle} → ${leg.toTitle}: faltam cerca de ${leg.deficitMinutes} min`,
+                )
+                .join(" · ")}
+            </span>
+          </div>
+        </div>
+      )}
       <div className="trip-map">
         <MapContainer
           key={positions.map((p) => p.join(",")).join(";")}
@@ -729,7 +749,12 @@ function TripMap({ events }) {
       {legs.length > 0 && (
         <div className="route-legs">
           {legs.map((leg, index) => (
-            <div key={`${leg.fromId}-${leg.toId}`}>
+            <div
+              className={
+                tightLegIds.has(`${leg.fromId}-${leg.toId}`) ? "tight" : ""
+              }
+              key={`${leg.fromId}-${leg.toId}`}
+            >
               <i>{index + 1}</i>
               <span>
                 <b>
@@ -742,6 +767,13 @@ function TripMap({ events }) {
                   {leg.durationMinutes} min{leg.real ? "" : "*"}
                 </small>
               </span>
+              <a
+                target="_blank"
+                rel="noreferrer"
+                href={`https://www.google.com/maps/dir/?api=1&origin=${leg.fromLatitude},${leg.fromLongitude}&destination=${leg.toLatitude},${leg.toLongitude}&travelmode=${mode === "cycling" ? "bicycling" : mode}`}
+              >
+                Abrir trajeto <ExternalLink />
+              </a>
             </div>
           ))}
           <p>

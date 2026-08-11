@@ -51,8 +51,10 @@ export function movePlanItem(items,itemId,targetDate,targetIndex){
 export function buildRouteLegs(items,mode='walking'){
   const speed={walking:4.8,cycling:15,driving:35,transit:22}[mode]||4.8;
   const located=sortPlanItems(items).filter(x=>Number.isFinite(x.latitude)&&Number.isFinite(x.longitude));
-  return located.slice(1).map((to,index)=>{const from=located[index],distanceKm=haversine(from.latitude,from.longitude,to.latitude,to.longitude),durationMinutes=Math.max(1,Math.round(distanceKm/speed*60));return {fromId:from.id,toId:to.id,fromTitle:from.title,toTitle:to.title,distanceKm,durationMinutes,mode};});
+  return located.slice(1).map((to,index)=>{const from=located[index],distanceKm=haversine(from.latitude,from.longitude,to.latitude,to.longitude),durationMinutes=Math.max(1,Math.round(distanceKm/speed*60));return {fromId:from.id,toId:to.id,fromTitle:from.title,toTitle:to.title,fromLatitude:from.latitude,fromLongitude:from.longitude,toLatitude:to.latitude,toLongitude:to.longitude,distanceKm,durationMinutes,mode};});
 }
+
+export function findTightRouteLegs(items,legs){const byId=new Map(items.map(item=>[item.id,item]));return legs.map(leg=>{const from=byId.get(leg.fromId),to=byId.get(leg.toId);if(!from||!to||from.date!==to.date||!from.time||!to.time)return null;const availableMinutes=minutes(to.time)-minutes(from.time)-Number(from.duration||0),deficitMinutes=Math.ceil(leg.durationMinutes-availableMinutes);return deficitMinutes>0?{...leg,availableMinutes,deficitMinutes}:null}).filter(Boolean);}
 
 function haversine(lat1,lon1,lat2,lon2){const rad=value=>value*Math.PI/180,dLat=rad(lat2-lat1),dLon=rad(lon2-lon1),a=Math.sin(dLat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLon/2)**2;return 6371*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 

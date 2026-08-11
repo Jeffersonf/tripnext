@@ -37,6 +37,8 @@ test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
   await page.getByRole('button',{name:'Carro'}).click();
   await page.getByRole('button',{name:'Calcular rota real'}).click();
   await expect(page.getByText(/Rota viária OSRM/)).toBeVisible();
+  await expect(page.getByText('O horário pode não fechar')).toBeVisible();
+  await expect(page.getByRole('link',{name:/Abrir trajeto/})).toHaveAttribute('href',/google\.com\/maps\/dir/);
   await page.getByRole('button',{name:'Duplicar dia'}).click();
   await page.getByRole('button',{name:'Duplicar planejamento'}).click();
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();
