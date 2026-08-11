@@ -452,7 +452,7 @@ Ordem exata de implementação:
 6. [x] Adicionar blocos manhã/tarde/noite e detecção de choque.
 7. [x] Adicionar opção de “tempo livre intencional”.
 8. [x] Criar testes E2E desta jornada.
-9. Migrar a mesma estrutura para Room no Android.
+9. [x] Migrar a mesma estrutura para Room no Android.
 
 ### Definição de pronto do M1
 
@@ -472,6 +472,8 @@ Ordem exata de implementação:
 | 2026-08-10 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — APK instalado no aparelho `23049PCD8G` |
 | 2026-08-11 | `npm run build` | **PASS** — web React/Vite |
 | 2026-08-11 | `npm test` | **PASS** — 5 testes de migração e planejamento web |
+| 2026-08-11 | `npm run test:e2e` | **PASS** — 2 jornadas completas em Chromium |
+| 2026-08-11 | `gradlew testDebugUnitTest` | **PASS** — 10 testes JVM após Room v2 |
 | 2026-08-11 | GitHub Actions Pages | **PASS** — publicação automática |
 
 ## Princípios permanentes

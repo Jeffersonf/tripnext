@@ -21,9 +21,11 @@ import java.time.ZoneId
 
 data class AppUiState(
     val trips: List<TripEntity> = emptyList(),
+    val archivedTrips: List<TripEntity> = emptyList(),
     val activeTrip: TripEntity? = null,
     val expenses: List<ExpenseEntity> = emptyList(),
     val itinerary: List<ItineraryEventEntity> = emptyList(),
+    val ideas: List<TripIdeaEntity> = emptyList(),
     val checklist: List<ChecklistItemEntity> = emptyList(),
     val categoryBudgets: List<CategoryBudgetEntity> = emptyList(),
     val spentByCategory: List<CategorySpent> = emptyList(),
@@ -48,20 +50,31 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     private val selectedTrip = selectedTripId.flatMapLatest { id -> id?.let(repository::trip) ?: flowOf(null) }
     private val expenses = selectedTripId.flatMapLatest { id -> id?.let(repository::expenses) ?: flowOf(emptyList()) }
     private val itinerary = selectedTripId.flatMapLatest { id -> id?.let(repository::itinerary) ?: flowOf(emptyList()) }
+    private val ideas = selectedTripId.flatMapLatest { id -> id?.let(repository::ideas) ?: flowOf(emptyList()) }
     private val checklist = selectedTripId.flatMapLatest { id -> id?.let(repository::checklist) ?: flowOf(emptyList()) }
     private val budgets = selectedTripId.flatMapLatest { id -> id?.let(repository::budgets) ?: flowOf(emptyList()) }
     private val spent = selectedTripId.flatMapLatest { id -> id?.let(repository::spentByCategory) ?: flowOf(emptyList()) }
 
-    val uiState = combine(repository.trips(), selectedTrip, expenses, itinerary, checklist, budgets, spent) { values ->
+    val uiState = combine(repository.trips(), repository.archivedTrips(), selectedTrip, expenses, itinerary, ideas, checklist, budgets, spent) { values ->
         @Suppress("UNCHECKED_CAST")
         val trips = values[0] as List<TripEntity>
-        val active = (values[1] as TripEntity?) ?: trips.firstOrNull { it.isActive } ?: trips.firstOrNull()
+        val active = (values[2] as TripEntity?) ?: trips.firstOrNull { it.isActive } ?: trips.firstOrNull()
         if (selectedTripId.value == null && active != null) selectedTripId.value = active.id
-        AppUiState(trips, active, values[2] as List<ExpenseEntity>, values[3] as List<ItineraryEventEntity>, values[4] as List<ChecklistItemEntity>, values[5] as List<CategoryBudgetEntity>, values[6] as List<CategorySpent>, false)
+        AppUiState(trips, values[1] as List<TripEntity>, active, values[3] as List<ExpenseEntity>, values[4] as List<ItineraryEventEntity>, values[5] as List<TripIdeaEntity>, values[6] as List<ChecklistItemEntity>, values[7] as List<CategoryBudgetEntity>, values[8] as List<CategorySpent>, false)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init { viewModelScope.launch { repository.deleteTrip("prototype-lisboa-porto"); repository.deleteTripsNamed("Lisboa & Porto"); selectedTripId.value = null } }
     fun selectTrip(id: String) { selectedTripId.value = id }
+    fun archiveTrip(id: String) = viewModelScope.launch { repository.archiveTrip(id); selectedTripId.value = null }
+    fun restoreTrip(id: String) = viewModelScope.launch { repository.restoreTrip(id); repository.activateTrip(id); selectedTripId.value = id }
+    fun addIdea(title: String, location: String = "", type: ItineraryType = ItineraryType.ACTIVITY, estimatedCostMinor: Long = 0, sourceUrl: String = "", notes: String = "") = viewModelScope.launch {
+        selectedTripId.value?.let { repository.saveIdea(TripIdeaEntity(tripId = it, title = title.trim(), location = location.trim(), type = type, estimatedCostMinor = estimatedCostMinor, sourceUrl = sourceUrl.trim(), notes = notes.trim())) }
+    }
+    fun scheduleIdea(idea: TripIdeaEntity, date: LocalDate, time: java.time.LocalTime) = viewModelScope.launch {
+        val startsAt = date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        repository.saveEvent(ItineraryEventEntity(tripId = idea.tripId, title = idea.title, type = idea.type, startsAt = startsAt, location = idea.location, notes = idea.notes, estimatedCostMinor = idea.estimatedCostMinor, sourceUrl = idea.sourceUrl))
+        repository.deleteIdea(idea.id)
+    }
     fun addExpense(amountMinor: Long, category: ExpenseCategory, description: String) = viewModelScope.launch {
         selectedTripId.value?.let { repository.saveExpense(ExpenseEntity(tripId = it, amountMinor = amountMinor, category = category, date = System.currentTimeMillis(), description = description)) }
     }

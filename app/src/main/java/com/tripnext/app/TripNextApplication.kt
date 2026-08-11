@@ -10,7 +10,7 @@ class TripNextApplication : Application() {
     lateinit var repository: TripRepository; private set
     override fun onCreate() {
         super.onCreate()
-        val database = Room.databaseBuilder(this, TripNextDatabase::class.java, "tripnext.db").build()
+        val database = Room.databaseBuilder(this, TripNextDatabase::class.java, "tripnext.db").addMigrations(TripNextDatabase.MIGRATION_1_2).build()
         repository = TripRepository(database.tripDao(), database.pendingOperationDao(), OfflineTripRemoteRepository())
     }
 }

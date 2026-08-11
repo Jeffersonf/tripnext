@@ -22,6 +22,8 @@ data class TripEntity(
     val totalBudgetMinor: Long,
     val currency: String = "BRL",
     val isActive: Boolean = false,
+    val archived: Boolean = false,
+    val travelers: Int = 1,
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -48,7 +50,10 @@ data class CategoryBudgetEntity(val tripId: String, val category: ExpenseCategor
 data class SavingsGoalEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val targetMinor: Long, val savedMinor: Long = 0, val targetDate: Long)
 
 @Entity(tableName = "itinerary_events", indices = [Index("tripId")])
-data class ItineraryEventEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType, val startsAt: Long, val endsAt: Long? = null, val location: String = "", val notes: String = "")
+data class ItineraryEventEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType, val startsAt: Long, val endsAt: Long? = null, val location: String = "", val notes: String = "", val sortOrder: Int = 0, val planningStatus: String = "RESEARCHING", val estimatedCostMinor: Long = 0, val bookingCode: String = "", val sourceUrl: String = "")
+
+@Entity(tableName = "trip_ideas", indices = [Index("tripId")])
+data class TripIdeaEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ItineraryType = ItineraryType.ACTIVITY, val location: String = "", val notes: String = "", val estimatedCostMinor: Long = 0, val sourceUrl: String = "", val createdAt: Long = System.currentTimeMillis())
 
 @Entity(tableName = "installment_reservations", indices = [Index("tripId")])
 data class InstallmentReservationEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val title: String, val type: ReservationType, val totalMinor: Long, val installmentCount: Int, val firstDueDate: Long, val intervalMonths: Int = 1)
