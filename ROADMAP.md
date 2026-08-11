@@ -2,6 +2,10 @@
 
 ## Web — planejamento da viagem
 
+- [x] Diagnóstico automático das lacunas do plano.
+- [x] Situação de pesquisa e reserva em cada item.
+- [x] Link automático de endereço para o Google Maps.
+- [x] Exportação do roteiro completo em calendário `.ics`.
 - [x] Roteiro organizado por cada dia da viagem.
 - [x] Transporte, hospedagem, passeios, alimentação e deslocamentos previstos.
 - [x] Valores estimados por item e consolidação por categoria e por pessoa.
