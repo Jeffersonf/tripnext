@@ -107,7 +107,7 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 - [ ] Duração estimada e intervalo entre atividades.
 - [x] Detectar choque de horários.
 - [ ] Detectar atividade fora do horário de funcionamento.
-- [ ] Permitir tempo livre intencional sem gerar alerta.
+- [x] Permitir tempo livre intencional sem gerar alerta.
 - [ ] Observações, tags, prioridade e acessibilidade.
 - [ ] Histórico simples de desfazer/refazer.
 
@@ -450,7 +450,7 @@ Ordem exata de implementação:
 4. [x] Permitir mover uma ideia para um dia.
 5. [x] Implementar drag-and-drop e persistir `sortOrder`.
 6. [x] Adicionar blocos manhã/tarde/noite e detecção de choque.
-7. Adicionar opção de “tempo livre intencional”.
+7. [x] Adicionar opção de “tempo livre intencional”.
 8. Criar testes E2E desta jornada.
 9. Migrar a mesma estrutura para Room no Android.
 
