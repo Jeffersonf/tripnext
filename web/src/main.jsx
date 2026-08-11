@@ -79,6 +79,7 @@ const emptyTrip = {
   start: "",
   end: "",
   travelers: 1,
+  participants: [],
   budget: 0,
   currency: "BRL",
   contingencyPercent: 0,
@@ -101,6 +102,10 @@ const pretty = (d) =>
         })
         .replaceAll(".", "")
     : "Data a definir";
+const daysUntil = (date) =>
+  date
+    ? Math.ceil((new Date(`${date}T23:59:59`) - new Date()) / 86400000)
+    : null;
 const iso = (d) => {
   const x = new Date(d);
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
@@ -258,6 +263,7 @@ function App() {
       )}
       {modal === "option" && (
         <OptionModal
+          trip={trip}
           onClose={() => setModal(null)}
           onSave={(option) => {
             update({
@@ -268,6 +274,14 @@ function App() {
                   id: newId(),
                   chosen: false,
                   observedAt: new Date().toISOString(),
+                  priceHistory: [
+                    {
+                      price: option.price,
+                      currency: option.costCurrency,
+                      exchangeRate: option.exchangeRate,
+                      observedAt: new Date().toISOString(),
+                    },
+                  ],
                 },
               ],
             });
@@ -377,6 +391,7 @@ function App() {
                   quoteDate: option.quoteDate,
                   costScope: option.costScope,
                   costClass: option.costClass,
+                  participantIds: option.participantIds,
                   link: option.url || "",
                   notes: [
                     option.provider && `Fornecedor: ${option.provider}`,
@@ -387,6 +402,10 @@ function App() {
                       option.destination &&
                       `${option.origin} → ${option.destination}`,
                     option.roomType && `Quarto: ${option.roomType}`,
+                    option.bookingDeadline &&
+                      `Reservar até: ${option.bookingDeadline}`,
+                    option.cancellationDeadline &&
+                      `Cancelamento grátis até: ${option.cancellationDeadline}`,
                   ]
                     .filter(Boolean)
                     .join(" · "),
@@ -1198,6 +1217,41 @@ function Comparisons({ trip, update, open, schedule }) {
   const remove = (id) =>
     confirm("Remover esta alternativa?") &&
     update({ options: options.filter((x) => x.id !== id) });
+  const updatePrice = (option) => {
+    const entered = prompt("Novo preço observado", String(option.price || 0));
+    if (entered === null || entered.trim() === "" || Number(entered) < 0)
+      return;
+    const observedAt = new Date().toISOString();
+    update({
+      options: options.map((item) =>
+        item.id === option.id
+          ? {
+              ...item,
+              price: Number(entered),
+              costMin: Math.min(
+                Number(item.costMin ?? entered),
+                Number(entered),
+              ),
+              costMax: Math.max(
+                Number(item.costMax ?? entered),
+                Number(entered),
+              ),
+              observedAt,
+              quoteDate: observedAt.slice(0, 10),
+              priceHistory: [
+                ...(item.priceHistory || []),
+                {
+                  price: Number(entered),
+                  currency: item.costCurrency,
+                  exchangeRate: item.exchangeRate,
+                  observedAt,
+                },
+              ],
+            }
+          : item,
+      ),
+    });
+  };
   return (
     <div className="page">
       <Header
@@ -1221,7 +1275,14 @@ function Comparisons({ trip, update, open, schedule }) {
           {Object.entries(groups).map(([decision, items]) => {
             const cheapest = Math.min(
               ...items.map(
-                (x) => costRange(x, trip.travelers, "price").expected,
+                (x) =>
+                  costRange(
+                    x,
+                    x.costScope === "person" && x.participantIds?.length
+                      ? x.participantIds.length
+                      : trip.travelers,
+                    "price",
+                  ).expected,
               ),
             );
             return (
@@ -1235,7 +1296,19 @@ function Comparisons({ trip, update, open, schedule }) {
                 </div>
                 <div className="option-grid">
                   {items.map((option) => {
-                    const range = costRange(option, trip.travelers, "price");
+                    const range = costRange(
+                      option,
+                      option.costScope === "person" &&
+                        option.participantIds?.length
+                        ? option.participantIds.length
+                        : trip.travelers,
+                      "price",
+                    );
+                    const history = option.priceHistory || [];
+                    const prior = history.at(-2);
+                    const priceDelta = prior
+                      ? Number(option.price) - Number(prior.price)
+                      : 0;
                     return (
                       <Card
                         className={`option-card ${option.chosen ? "chosen" : ""}`}
@@ -1293,6 +1366,42 @@ function Comparisons({ trip, update, open, schedule }) {
                             ? "custo fixo"
                             : "custo diário"}
                         </small>
+                        {priceDelta !== 0 && (
+                          <small
+                            className={
+                              priceDelta > 0 ? "deadline-alert" : "best-price"
+                            }
+                          >
+                            {priceDelta > 0 ? "Subiu" : "Caiu"}{" "}
+                            {money(
+                              Math.abs(
+                                priceDelta * Number(option.exchangeRate || 1),
+                              ),
+                              trip.currency,
+                            )}{" "}
+                            desde a consulta anterior
+                          </small>
+                        )}
+                        {option.bookingDeadline && (
+                          <small
+                            className={
+                              daysUntil(option.bookingDeadline) <= 7
+                                ? "deadline-alert"
+                                : ""
+                            }
+                          >
+                            Reservar até {pretty(option.bookingDeadline)} ·{" "}
+                            {daysUntil(option.bookingDeadline) < 0
+                              ? "prazo vencido"
+                              : `${daysUntil(option.bookingDeadline)} dia(s)`}
+                          </small>
+                        )}
+                        {option.cancellationDeadline && (
+                          <small>
+                            Cancelamento grátis até{" "}
+                            {pretty(option.cancellationDeadline)}
+                          </small>
+                        )}
                         {range.expected === cheapest && items.length > 1 && (
                           <small className="best-price">Menor preço</small>
                         )}
@@ -1395,6 +1504,9 @@ function Comparisons({ trip, update, open, schedule }) {
                           <button onClick={() => schedule(option)}>
                             <CalendarDays /> Levar ao roteiro
                           </button>
+                          <button onClick={() => updatePrice(option)}>
+                            <Wallet /> Atualizar preço
+                          </button>
                         </div>
                       </Card>
                     );
@@ -1410,7 +1522,7 @@ function Comparisons({ trip, update, open, schedule }) {
 }
 function Costs({ trip, edit }) {
   const events = trip.itinerary || [],
-    summary = summarizeCosts(events, trip.travelers),
+    summary = summarizeCosts(events, trip.participants || trip.travelers),
     total = summary.total.expected,
     contingency = (total * (Number(trip.contingencyPercent) || 0)) / 100,
     plannedWithReserve = total + contingency;
@@ -1420,7 +1532,7 @@ function Costs({ trip, edit }) {
       ...t,
       total: summarizeCosts(
         events.filter((e) => e.type === id),
-        trip.travelers,
+        trip.participants || trip.travelers,
       ).total.expected,
     }))
     .filter((x) => x.total);
@@ -1521,6 +1633,20 @@ function Costs({ trip, edit }) {
             </Card>
           ))}
       </div>
+      <h3 className="section-title">Previsão por viajante</h3>
+      <div className="cost-grid">
+        {(trip.participants || []).map((participant) => (
+          <Card key={participant.id}>
+            <div>
+              <span>{participant.name}</span>
+              <strong>
+                {money(summary.byTraveler[participant.id] || 0, trip.currency)}
+              </strong>
+              <small>Itens atribuídos e rateios do grupo</small>
+            </div>
+          </Card>
+        ))}
+      </div>
       <h3 className="section-title">Itens com custo</h3>
       <Card className="cost-list">
         {events
@@ -1536,7 +1662,15 @@ function Costs({ trip, edit }) {
                 </small>
               </div>
               <strong>
-                {money(costRange(e, trip.travelers).expected, trip.currency)}
+                {money(
+                  costRange(
+                    e,
+                    e.costScope === "person" && e.participantIds?.length
+                      ? e.participantIds.length
+                      : trip.travelers,
+                  ).expected,
+                  trip.currency,
+                )}
               </strong>
               <ChevronRight />
             </button>
@@ -1678,6 +1812,10 @@ function TripModal({ initial, onClose, onSave }) {
     start: initial?.start || "",
     end: initial?.end || "",
     travelers: initial?.travelers || 1,
+    participantNames:
+      (initial?.participants || [])
+        .map((participant) => participant.name)
+        .join(", ") || "Viajante 1",
     budget: initial?.budget || "",
     currency: initial?.currency || "BRL",
     contingencyPercent: initial?.contingencyPercent || 0,
@@ -1751,14 +1889,11 @@ function TripModal({ initial, onClose, onSave }) {
         </div>
         <div>
           <label>
-            Viajantes
+            Viajantes (separados por vírgula)
             <input
-              type="number"
-              min="1"
-              value={f.travelers}
-              onChange={(e) =>
-                setF({ ...f, travelers: Number(e.target.value) })
-              }
+              value={f.participantNames}
+              onChange={(e) => setF({ ...f, participantNames: e.target.value })}
+              placeholder="Ana, Bruno, Clara"
             />
           </label>
           <label>
@@ -1772,7 +1907,25 @@ function TripModal({ initial, onClose, onSave }) {
             />
           </label>
         </div>
-        <button className="primary" disabled={!valid} onClick={() => onSave(f)}>
+        <button
+          className="primary"
+          disabled={!valid || !f.participantNames.trim()}
+          onClick={() => {
+            const names = f.participantNames
+              .split(",")
+              .map((name) => name.trim())
+              .filter(Boolean);
+            onSave({
+              ...f,
+              participantNames: undefined,
+              travelers: names.length,
+              participants: names.map((name, index) => ({
+                id: initial?.participants?.[index]?.id || newId(),
+                name,
+              })),
+            });
+          }}
+        >
           {initial ? "Salvar alterações" : "Criar meu planejamento"}
         </button>
       </div>
@@ -1917,6 +2070,7 @@ function EventModal({ trip, initial, onClose, onSave }) {
       quoteDate: "",
       costScope: "group",
       costClass: "daily",
+      participantIds: [],
       city: "",
       booking: "",
       link: "",
@@ -2117,6 +2271,29 @@ function EventModal({ trip, initial, onClose, onSave }) {
           </label>
         </div>
         <label>
+          Viajantes deste custo
+          <select
+            multiple
+            value={f.participantIds || []}
+            onChange={(e) =>
+              set(
+                "participantIds",
+                Array.from(e.target.selectedOptions, (option) => option.value),
+              )
+            }
+          >
+            {(trip.participants || []).map((participant) => (
+              <option value={participant.id} key={participant.id}>
+                {participant.name}
+              </option>
+            ))}
+          </select>
+          <small>
+            Sem seleção, o custo vale para todos. Use Ctrl/Cmd para selecionar
+            mais de uma pessoa.
+          </small>
+        </label>
+        <label>
           Reserva / confirmação
           <input
             value={f.booking || ""}
@@ -2280,7 +2457,7 @@ function IdeaModal({ onClose, onSave }) {
     </Modal>
   );
 }
-function OptionModal({ onClose, onSave }) {
+function OptionModal({ trip, onClose, onSave }) {
   const [f, setF] = useState({
       decision: "",
       kind: "transporte",
@@ -2303,6 +2480,9 @@ function OptionModal({ onClose, onSave }) {
       quoteDate: new Date().toISOString().slice(0, 10),
       costScope: "group",
       costClass: "fixed",
+      participantIds: [],
+      bookingDeadline: "",
+      cancellationDeadline: "",
       cancellation: "",
       baggage: "",
       pros: "",
@@ -2408,6 +2588,46 @@ function OptionModal({ onClose, onSave }) {
               <option value="group">Total do grupo</option>
               <option value="person">Por pessoa</option>
             </select>
+          </label>
+        </div>
+        <label>
+          Viajantes desta opção
+          <select
+            multiple
+            value={f.participantIds}
+            onChange={(e) =>
+              set(
+                "participantIds",
+                Array.from(e.target.selectedOptions, (option) => option.value),
+              )
+            }
+          >
+            {(trip.participants || []).map((participant) => (
+              <option value={participant.id} key={participant.id}>
+                {participant.name}
+              </option>
+            ))}
+          </select>
+          <small>
+            Sem seleção, a alternativa considera todos os viajantes.
+          </small>
+        </label>
+        <div>
+          <label>
+            Prazo para reservar
+            <input
+              type="date"
+              value={f.bookingDeadline}
+              onChange={(e) => set("bookingDeadline", e.target.value)}
+            />
+          </label>
+          <label>
+            Cancelamento grátis até
+            <input
+              type="date"
+              value={f.cancellationDeadline}
+              onChange={(e) => set("cancellationDeadline", e.target.value)}
+            />
           </label>
         </div>
         {f.kind === "transporte" && (

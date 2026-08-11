@@ -6,7 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 6, exportSchema = true)
+@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, OptionPriceObservationEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 7, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class TripNextDatabase : RoomDatabase() {
     abstract fun tripDao(): TripDao
@@ -73,6 +73,18 @@ abstract class TripNextDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE trip_options ADD COLUMN costScope TEXT NOT NULL DEFAULT 'GROUP'")
                 db.execSQL("ALTER TABLE trip_options ADD COLUMN costClass TEXT NOT NULL DEFAULT 'FIXED'")
                 db.execSQL("UPDATE trip_options SET estimatedMinMinor = estimatedCostMinor, estimatedMaxMinor = estimatedCostMinor")
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE itinerary_events ADD COLUMN participantIds TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN participantIds TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN bookingDeadline INTEGER")
+                db.execSQL("ALTER TABLE trip_options ADD COLUMN cancellationDeadline INTEGER")
+                db.execSQL("CREATE TABLE IF NOT EXISTS option_price_observations (id TEXT NOT NULL, tripId TEXT NOT NULL, optionId TEXT NOT NULL, priceMinor INTEGER NOT NULL, currency TEXT NOT NULL, exchangeRate REAL NOT NULL, observedAt INTEGER NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_option_price_observations_tripId ON option_price_observations(tripId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_option_price_observations_optionId ON option_price_observations(optionId)")
+                db.execSQL("INSERT INTO option_price_observations (id, tripId, optionId, priceMinor, currency, exchangeRate, observedAt) SELECT id || '-initial', tripId, id, estimatedCostMinor, currency, exchangeRate, observedAt FROM trip_options")
             }
         }
     }

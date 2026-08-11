@@ -7,12 +7,25 @@ export function normalizeTrip(
   now = new Date().toISOString(),
 ) {
   const currency = trip?.currency || "BRL";
+  const travelerCount = Math.max(1, Number(trip?.travelers) || 1);
+  const participants = (
+    trip?.participants?.length
+      ? trip.participants
+      : Array.from({ length: travelerCount }, (_, index) => ({
+          id: `${trip?.id || "trip"}-traveler-${index + 1}`,
+          name: `Viajante ${index + 1}`,
+        }))
+  ).map((participant, index) => ({
+    id: participant.id || idFactory(),
+    name: participant.name?.trim() || `Viajante ${index + 1}`,
+  }));
   return {
     name: "",
     destination: "",
     start: "",
     end: "",
     travelers: 1,
+    participants: [],
     budget: 0,
     currency: "BRL",
     contingencyPercent: 0,
@@ -25,6 +38,8 @@ export function normalizeTrip(
     createdAt: trip?.createdAt || now,
     updatedAt: trip?.updatedAt || now,
     currency,
+    travelers: participants.length,
+    participants,
     itinerary: (trip?.itinerary || []).map((item, index) => ({
       ...normalizeCostItem(item, currency),
       id: item.id || idFactory(),
@@ -34,10 +49,25 @@ export function normalizeTrip(
       ...item,
       id: item.id || idFactory(),
     })),
-    options: (trip?.options || []).map((item) => ({
-      ...normalizeCostItem(item, currency, "price"),
-      id: item.id || idFactory(),
-    })),
+    options: (trip?.options || []).map((item) => {
+      const normalized = normalizeCostItem(item, currency, "price");
+      return {
+        ...normalized,
+        id: item.id || idFactory(),
+        bookingDeadline: item.bookingDeadline || "",
+        cancellationDeadline: item.cancellationDeadline || "",
+        priceHistory: item.priceHistory?.length
+          ? item.priceHistory
+          : [
+              {
+                price: normalized.price,
+                currency: normalized.costCurrency,
+                exchangeRate: normalized.exchangeRate,
+                observedAt: item.observedAt || now,
+              },
+            ],
+      };
+    }),
     checklist: trip?.checklist || [],
   };
 }
@@ -58,6 +88,9 @@ export function normalizeCostItem(
     quoteDate: item.quoteDate || "",
     costScope: item.costScope || "group",
     costClass: item.costClass || "daily",
+    participantIds: Array.isArray(item.participantIds)
+      ? item.participantIds
+      : [],
   };
 }
 
@@ -73,10 +106,24 @@ export function costRange(item, travelers = 1, valueKey = "cost") {
   };
 }
 
-export function summarizeCosts(items, travelers = 1) {
+export function summarizeCosts(items, participants = 1) {
+  const people = Array.isArray(participants)
+    ? participants
+    : Array.from(
+        { length: Math.max(1, Number(participants) || 1) },
+        (_, index) => ({
+          id: `traveler-${index + 1}`,
+          name: `Viajante ${index + 1}`,
+        }),
+      );
   const rows = items.map((item) => ({
     ...item,
-    range: costRange(item, travelers),
+    range: costRange(
+      item,
+      item.costScope === "person" && item.participantIds?.length
+        ? item.participantIds.length
+        : people.length,
+    ),
   }));
   const sum = (key) => rows.reduce((total, row) => total + row.range[key], 0);
   const dimensions = (key) =>
@@ -90,12 +137,24 @@ export function summarizeCosts(items, travelers = 1) {
         ],
       ),
     );
+  const byTraveler = Object.fromEntries(people.map((person) => [person.id, 0]));
+  rows.forEach((row) => {
+    const selected = row.participantIds?.length
+      ? people.filter((person) => row.participantIds.includes(person.id))
+      : people;
+    if (!selected.length) return;
+    const share = row.range.expected / selected.length;
+    selected.forEach((person) => {
+      byTraveler[person.id] += share;
+    });
+  });
   return {
     rows,
     total: { min: sum("min"), expected: sum("expected"), max: sum("max") },
     byDay: dimensions("date"),
     byCity: dimensions("city"),
     byClass: dimensions("costClass"),
+    byTraveler,
   };
 }
 
@@ -114,15 +173,15 @@ export function migrateStoredData(
       )
         ? saved.activeTripId
         : trips.find((t) => !t.archived)?.id || null;
-      return { version: 4, trips, activeTripId: active };
+      return { version: 5, trips, activeTripId: active };
     }
     const legacy = legacyText ? JSON.parse(legacyText) : null;
     if (legacy) {
       const trip = normalizeTrip(legacy, idFactory, now);
-      return { version: 4, trips: [trip], activeTripId: trip.id };
+      return { version: 5, trips: [trip], activeTripId: trip.id };
     }
   } catch {}
-  return { version: 4, trips: [], activeTripId: null };
+  return { version: 5, trips: [], activeTripId: null };
 }
 
 export function sortPlanItems(items) {

@@ -131,7 +131,7 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 - [x] Faixa de preço mínimo/esperado/máximo.
 - [x] Alternativas comparáveis antes da decisão.
 - [x] Custos fixos separados dos custos diários.
-- [ ] Total por dia, cidade, categoria e viajante: dia, cidade, categoria e média por pessoa concluídos; falta atribuição nominal por viajante.
+- [x] Total por dia, cidade, categoria e viajante, com rateio do grupo e seleção nominal dos beneficiários.
 - [x] Reserva de contingência configurável.
 
 ### Critérios de aceite da fase
@@ -167,7 +167,7 @@ Objetivo: não ser apenas um campo de busca; cada resultado deve virar ideia, co
 - [x] Política de cancelamento e bagagem/inclusões.
 - [x] Prós, contras e notas pessoais.
 - [x] Marcar uma opção como escolhida sem apagar as alternativas.
-- [ ] Alertas de prazo e mudança relevante de preço quando o provedor permitir.
+- [x] Alertas visuais de prazo e mudança relevante de preço, com histórico manual; automação depende de provedor autorizado.
 
 ### Integrações previstas
 
@@ -444,29 +444,29 @@ Critérios de aceite:
 
 - [x] **M1:** múltiplas viagens, caixa de ideias, organização diária, drag-and-drop, conflitos e paridade do modelo local no Android.
 - [x] **M2:** lugares estruturados, mapa, trechos, rota viária sob demanda, cache e alertas de deslocamento inviável.
-- [x] **M3.1:** quadro de comparação, escolha sem apagar alternativas e conversão da opção escolhida em item do roteiro.
+- [x] **M3:** comparação, moedas, faixas, custos por viajante, contingência, prazos e histórico manual de preços.
 
-## Próximo sprint recomendado — M3.2
+## Próximo sprint recomendado — M4
 
 Ordem exata de implementação:
 
-1. [x] Adicionar moeda original, moeda da viagem e data da cotação.
-2. [x] Separar preço mínimo, esperado e máximo.
-3. [x] Marcar custo como individual ou do grupo e calcular por pessoa.
-4. [x] Separar custos fixos dos custos por dia.
-5. [ ] Exibir totais por viajante nominal; totais por dia, cidade e categoria já estão disponíveis.
-6. [x] Adicionar contingência configurável ao orçamento previsto.
-7. [ ] Criar lembrete de prazo para reserva/cancelamento.
-8. [ ] Manter histórico de preço informado pelo usuário ou por provedor permitido.
-9. [x] Cobrir cálculos e migração web com testes unitários e E2E; teste instrumentado de migração Room permanece na seção de qualidade.
+1. [ ] Criar API própria e banco PostgreSQL com migrations versionadas.
+2. [ ] Implementar sessão segura e endpoints `/api/me` e `/api/trips`.
+3. [ ] Sincronizar viagens, participantes, roteiro, alternativas e checklist.
+4. [ ] Usar idempotency keys e tombstones para fila offline.
+5. [ ] Definir resolução de conflito e mostrar estado de sincronização.
+6. [ ] Remover a chave Gemini dos clientes e chamar IA apenas pelo backend.
+7. [ ] Adicionar contratos OpenAPI e testes cliente/servidor.
+8. [ ] Publicar ambientes de homologação e produção com segredos gerenciados.
+9. [ ] Validar a mesma viagem no web e Android após edição offline.
 
-### Definição de pronto do M3.2
+### Definição de pronto do M4
 
-- O total previsto é explicável por item, dia, categoria e viajante.
-- Valores convertidos sempre mostram moeda, cotação e data de referência.
-- Alternativas continuam comparáveis sem perder o preço originalmente observado.
-- Migrações preservam dados existentes no navegador e no Room.
-- Build web e Android e testes automatizados permanecem aprovados.
+- O usuário autenticado abre a mesma viagem no web e Android.
+- Alterações offline são enviadas uma vez e não criam duplicatas.
+- Conflitos nunca apagam silenciosamente dados mais recentes.
+- Chaves de IA e provedores não aparecem no APK, JavaScript ou Git.
+- API, migrações, clientes e fluxo offline têm testes automatizados.
 
 ## Registro de validação
 
@@ -486,6 +486,11 @@ Ordem exata de implementação:
 | 2026-08-11 | `npm test` | **PASS** — 12 testes, incluindo conversão, faixa e dimensões de custo |
 | 2026-08-11 | `npm run test:e2e` | **PASS** — comparação com faixa de preço convertida até o resumo de custos |
 | 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 14 testes JVM, Room v6 e APK debug gerado |
+| 2026-08-11 | `npm test` | **PASS** — 13 testes, incluindo rateio nominal de custos |
+| 2026-08-11 | `npm run test:e2e` | **PASS** — participantes, prazo, atualização de preço e histórico até o roteiro |
+| 2026-08-11 | `compileDebugAndroidTestKotlin` | **PASS** — teste de migração Room 6→7 compilado |
+| 2026-08-11 | `connectedDebugAndroidTest` | **PENDENTE** — aparelho recusou a instalação do APK de teste com `INSTALL_FAILED_USER_RESTRICTED` |
+| 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 16 testes JVM, Room v7 e APK debug gerado |
 
 ## Princípios permanentes
 

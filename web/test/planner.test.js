@@ -25,7 +25,7 @@ test("migra uma viagem legada sem perder roteiro", () => {
     () => `id-${++n}`,
     "2026-08-11T00:00:00Z",
   );
-  assert.equal(data.version, 4);
+  assert.equal(data.version, 5);
   assert.equal(data.trips[0].name, "Chile");
   assert.equal(data.trips[0].itinerary[0].title, "Voo");
   assert.equal(data.trips[0].itinerary[0].costMin, 800);
@@ -42,7 +42,7 @@ test("migra coleção v2 e preserva viagem ativa", () => {
     ],
   };
   const data = migrateStoredData(JSON.stringify(raw), null);
-  assert.equal(data.version, 4);
+  assert.equal(data.version, 5);
   assert.equal(data.activeTripId, "b");
   assert.equal(data.trips.length, 2);
 });
@@ -158,4 +158,20 @@ test("resume custos por dia, cidade e classe sem perder a faixa", () => {
   assert.deepEqual(summary.total, { min: 590, expected: 600, max: 620 });
   assert.equal(summary.byCity.Roma, 600);
   assert.equal(summary.byClass.fixed, 500);
+});
+test("atribui custo individual e rateio do grupo aos viajantes corretos", () => {
+  const people = [
+    { id: "ana", name: "Ana" },
+    { id: "bia", name: "Bia" },
+  ];
+  const summary = summarizeCosts(
+    [
+      { cost: 100, costScope: "group" },
+      { cost: 40, costScope: "person", participantIds: ["ana"] },
+    ],
+    people,
+  );
+  assert.equal(summary.total.expected, 140);
+  assert.equal(summary.byTraveler.ana, 90);
+  assert.equal(summary.byTraveler.bia, 50);
 });

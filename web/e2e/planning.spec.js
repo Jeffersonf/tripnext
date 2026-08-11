@@ -123,6 +123,7 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
   await page.getByLabel("Para onde você vai?").fill("Rio de Janeiro");
   await page.getByLabel("Data de ida").fill("2027-04-01");
   await page.getByLabel("Data de volta").fill("2027-04-03");
+  await page.getByLabel("Viajantes (separados por vírgula)").fill("Ana, Bia");
   await page.getByRole("button", { name: "Criar meu planejamento" }).click();
   await page.getByRole("button", { name: "Comparar" }).click();
   for (const [title, price, room, nights] of [
@@ -137,6 +138,11 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
     await page.getByLabel("Preço total previsto").fill(String(price));
     await page.getByLabel("Preço mínimo").fill(String(price - 100));
     await page.getByLabel("Preço máximo").fill(String(price + 100));
+    await page.getByLabel("Preço informado").selectOption("person");
+    await page
+      .getByLabel("Viajantes desta opção")
+      .selectOption({ label: "Ana" });
+    await page.getByLabel("Prazo para reservar").fill("2027-03-20");
     await page.getByLabel("Nome da opção").fill(title);
     await page.getByLabel("Tipo de quarto").fill(room);
     await page.getByLabel("Número de diárias").fill(String(nights));
@@ -154,10 +160,14 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
   await expect(
     chosenCard.locator("dd").getByText("2", { exact: true }),
   ).toBeVisible();
+  await expect(chosenCard.getByText(/Reservar até/)).toBeVisible();
   await chosenCard.getByRole("button", { name: "Escolher" }).click();
   await expect(
     chosenCard.getByRole("button", { name: "Escolhida" }),
   ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept("850"));
+  await chosenCard.getByRole("button", { name: "Atualizar preço" }).click();
+  await expect(chosenCard.getByText(/Caiu R\$\s*50,00/)).toBeVisible();
   await chosenCard.getByRole("button", { name: "Levar ao roteiro" }).click();
   await page.getByRole("button", { name: "Salvar item" }).click();
   await page.getByRole("button", { name: "Roteiro", exact: true }).click();
@@ -168,4 +178,6 @@ test("compara alternativas, escolhe uma e leva ao roteiro", async ({
   await expect(
     page.getByText(/Faixa R\$\s*800,00 — R\$\s*1\.000,00/),
   ).toBeVisible();
+  await expect(page.getByText("Ana")).toBeVisible();
+  await expect(page.getByText("Bia")).toBeVisible();
 });
