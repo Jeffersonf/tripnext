@@ -501,6 +501,7 @@ Ordem exata de implementação:
 | 2026-08-11 | `compileDebugAndroidTestKotlin` | **PASS** — teste de migração Room 6→7 compilado |
 | 2026-08-11 | `connectedDebugAndroidTest` | **PENDENTE** — aparelho recusou a instalação do APK de teste com `INSTALL_FAILED_USER_RESTRICTED` |
 | 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 16 testes JVM, Room v7 e APK debug gerado |
+| 2026-08-11 | `server: npm test` no GitHub Actions | **PASS** — 8 testes, incluindo migration e sync idempotente em PostgreSQL 17 real |
 
 ## Princípios permanentes
 
