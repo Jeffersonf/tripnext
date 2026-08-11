@@ -349,9 +349,21 @@ function App() {
                 setDraftEvent({
                   type: option.kind,
                   title: option.title,
-                  location: option.location || "",
-                  date: trip.start,
-                  time: "09:00",
+                  location: option.location || option.destination || "",
+                  date: option.departAt?.slice(0, 10) || trip.start,
+                  time: option.departAt?.slice(11, 16) || "09:00",
+                  duration:
+                    option.duration ||
+                    (option.departAt && option.arriveAt
+                      ? Math.max(
+                          0,
+                          Math.round(
+                            (new Date(option.arriveAt) -
+                              new Date(option.departAt)) /
+                              60000,
+                          ),
+                        )
+                      : 0),
                   status: option.chosen ? "reservar" : "pesquisar",
                   cost: option.price,
                   link: option.url || "",
@@ -360,6 +372,10 @@ function App() {
                     option.cancellation &&
                       `Cancelamento: ${option.cancellation}`,
                     option.baggage && `Bagagem: ${option.baggage}`,
+                    option.origin &&
+                      option.destination &&
+                      `${option.origin} → ${option.destination}`,
+                    option.roomType && `Quarto: ${option.roomType}`,
                   ]
                     .filter(Boolean)
                     .join(" · "),
@@ -1240,6 +1256,53 @@ function Comparisons({ trip, update, open, schedule }) {
                           <small className="best-price">Menor preço</small>
                         )}
                       <dl>
+                        {option.kind === "transporte" && option.origin && (
+                          <>
+                            <dt>Trajeto</dt>
+                            <dd>
+                              {option.origin} →{" "}
+                              {option.destination || "a definir"}
+                            </dd>
+                          </>
+                        )}
+                        {option.kind === "transporte" && option.departAt && (
+                          <>
+                            <dt>Horários</dt>
+                            <dd>
+                              {new Date(option.departAt).toLocaleString(
+                                "pt-BR",
+                              )}{" "}
+                              {option.arriveAt
+                                ? `→ ${new Date(option.arriveAt).toLocaleString("pt-BR")}`
+                                : ""}
+                            </dd>
+                          </>
+                        )}
+                        {option.kind === "transporte" &&
+                          option.stops !== "" && (
+                            <>
+                              <dt>Paradas</dt>
+                              <dd>{option.stops}</dd>
+                            </>
+                          )}
+                        {option.kind === "hospedagem" && option.roomType && (
+                          <>
+                            <dt>Quarto</dt>
+                            <dd>{option.roomType}</dd>
+                          </>
+                        )}
+                        {option.kind === "hospedagem" && option.nights && (
+                          <>
+                            <dt>Diárias</dt>
+                            <dd>{option.nights}</dd>
+                          </>
+                        )}
+                        {option.kind === "passeio" && option.duration && (
+                          <>
+                            <dt>Duração</dt>
+                            <dd>{option.duration} min</dd>
+                          </>
+                        )}
                         {option.cancellation && (
                           <>
                             <dt>Cancelamento</dt>
@@ -2005,6 +2068,14 @@ function OptionModal({ onClose, onSave }) {
       title: "",
       provider: "",
       location: "",
+      origin: "",
+      destination: "",
+      departAt: "",
+      arriveAt: "",
+      stops: "",
+      roomType: "",
+      nights: "",
+      duration: "",
       price: "",
       currency: "BRL",
       cancellation: "",
@@ -2049,6 +2120,87 @@ function OptionModal({ onClose, onSave }) {
             />
           </label>
         </div>
+        {f.kind === "transporte" && (
+          <>
+            <div>
+              <label>
+                Origem
+                <input
+                  value={f.origin}
+                  onChange={(e) => set("origin", e.target.value)}
+                  placeholder="GRU"
+                />
+              </label>
+              <label>
+                Destino
+                <input
+                  value={f.destination}
+                  onChange={(e) => set("destination", e.target.value)}
+                  placeholder="EZE"
+                />
+              </label>
+            </div>
+            <div>
+              <label>
+                Saída
+                <input
+                  type="datetime-local"
+                  value={f.departAt}
+                  onChange={(e) => set("departAt", e.target.value)}
+                />
+              </label>
+              <label>
+                Chegada
+                <input
+                  type="datetime-local"
+                  value={f.arriveAt}
+                  onChange={(e) => set("arriveAt", e.target.value)}
+                />
+              </label>
+            </div>
+            <label>
+              Número de paradas
+              <input
+                type="number"
+                min="0"
+                value={f.stops}
+                onChange={(e) => set("stops", e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {f.kind === "hospedagem" && (
+          <div>
+            <label>
+              Tipo de quarto
+              <input
+                value={f.roomType}
+                onChange={(e) => set("roomType", e.target.value)}
+                placeholder="Duplo com varanda"
+              />
+            </label>
+            <label>
+              Número de diárias
+              <input
+                type="number"
+                min="1"
+                value={f.nights}
+                onChange={(e) => set("nights", e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+        {f.kind === "passeio" && (
+          <label>
+            Duração prevista (minutos)
+            <input
+              type="number"
+              min="0"
+              value={f.duration}
+              onChange={(e) => set("duration", e.target.value)}
+            />
+          </label>
+        )}
         <label>
           Nome da opção
           <input
@@ -2121,7 +2273,15 @@ function OptionModal({ onClose, onSave }) {
         <button
           className="primary"
           disabled={!f.decision || !f.title}
-          onClick={() => onSave({ ...f, price: Number(f.price) || 0 })}
+          onClick={() =>
+            onSave({
+              ...f,
+              price: Number(f.price) || 0,
+              stops: f.stops === "" ? "" : Number(f.stops),
+              nights: Number(f.nights) || 0,
+              duration: Number(f.duration) || 0,
+            })
+          }
         >
           Adicionar para comparar
         </button>

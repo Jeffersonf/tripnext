@@ -129,7 +129,7 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 - [ ] Conversão com cotação e data de referência.
 - [ ] Custo por pessoa versus custo do grupo.
 - [ ] Faixa de preço mínimo/esperado/máximo.
-- [ ] Alternativas comparáveis antes da decisão.
+- [x] Alternativas comparáveis antes da decisão.
 - [ ] Custos fixos separados dos custos diários.
 - [ ] Total por dia, cidade, categoria e viajante.
 - [ ] Reserva de contingência configurável.
@@ -162,7 +162,7 @@ Objetivo: não ser apenas um campo de busca; cada resultado deve virar ideia, co
 ### Comparação
 
 - [x] Quadro manual de alternativas para transporte, hospedagem e passeio, no web e Room.
-- [ ] Campos comparáveis por modalidade.
+- [x] Campos comparáveis por modalidade: trajeto, horários e escalas para transporte; quarto e diárias para hospedagem; duração para passeios.
 - [x] Preço observado e momento da consulta.
 - [x] Política de cancelamento e bagagem/inclusões.
 - [x] Prós, contras e notas pessoais.
@@ -440,28 +440,33 @@ Critérios de aceite:
 | M7 | Colaboração | Grupo planejando em tempo real |
 | M8 | Offline e modo viagem | Produto útil durante a viagem |
 
-## Próximo sprint recomendado — M1
+## Incrementos concluídos
+
+- [x] **M1:** múltiplas viagens, caixa de ideias, organização diária, drag-and-drop, conflitos e paridade do modelo local no Android.
+- [x] **M2:** lugares estruturados, mapa, trechos, rota viária sob demanda, cache e alertas de deslocamento inviável.
+- [x] **M3.1:** quadro de comparação, escolha sem apagar alternativas e conversão da opção escolhida em item do roteiro.
+
+## Próximo sprint recomendado — M3.2
 
 Ordem exata de implementação:
 
-1. [x] Migrar `localStorage` de uma viagem única para coleção versionada de viagens.
-2. [x] Criar seletor de viagem ativa, arquivar, duplicar e excluir.
-3. [x] Criar caixa de ideias sem data.
-4. [x] Permitir mover uma ideia para um dia.
-5. [x] Implementar drag-and-drop e persistir `sortOrder`.
-6. [x] Adicionar blocos manhã/tarde/noite e detecção de choque.
-7. [x] Adicionar opção de “tempo livre intencional”.
-8. [x] Criar testes E2E desta jornada.
-9. [x] Migrar a mesma estrutura para Room no Android.
+1. [ ] Adicionar moeda original, moeda da viagem e data da cotação.
+2. [ ] Separar preço mínimo, esperado e máximo.
+3. [ ] Marcar custo como individual ou do grupo e calcular por viajante.
+4. [ ] Separar custos fixos dos custos por dia.
+5. [ ] Exibir totais por dia, cidade, categoria e viajante.
+6. [ ] Adicionar contingência configurável ao orçamento previsto.
+7. [ ] Criar lembrete de prazo para reserva/cancelamento.
+8. [ ] Manter histórico de preço informado pelo usuário ou por provedor permitido.
+9. [ ] Cobrir cálculos e migrações com testes unitários e E2E.
 
-### Definição de pronto do M1
+### Definição de pronto do M3.2
 
-- Build web e Android aprovados.
-- Migração preserva os dados já existentes do usuário.
-- Fluxo completo funciona em tela de 360 px e desktop.
-- Operações destrutivas pedem confirmação.
-- Nenhuma credencial entra no cliente ou no Git.
-- `ROADMAP.md` e documentação técnica atualizados.
+- O total previsto é explicável por item, dia, categoria e viajante.
+- Valores convertidos sempre mostram moeda, cotação e data de referência.
+- Alternativas continuam comparáveis sem perder o preço originalmente observado.
+- Migrações preservam dados existentes no navegador e no Room.
+- Build web e Android e testes automatizados permanecem aprovados.
 
 ## Registro de validação
 
@@ -475,6 +480,9 @@ Ordem exata de implementação:
 | 2026-08-11 | `npm run test:e2e` | **PASS** — 2 jornadas completas em Chromium |
 | 2026-08-11 | `gradlew testDebugUnitTest` | **PASS** — 10 testes JVM após Room v2 |
 | 2026-08-11 | GitHub Actions Pages | **PASS** — publicação automática |
+| 2026-08-11 | `npm test` | **PASS** — 10 testes de migração, planejamento, rotas e comparação |
+| 2026-08-11 | `npm run test:e2e` | **PASS** — 3 jornadas completas em Chromium, incluindo comparação e agendamento |
+| 2026-08-11 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — 12 testes JVM, Room v5 e APK debug gerado |
 
 ## Princípios permanentes
 
