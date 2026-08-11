@@ -99,13 +99,13 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 
 ### Roteiro
 
-- [ ] Arrastar e soltar itens dentro do dia.
-- [ ] Mover um item para outro dia.
+- [x] Arrastar e soltar itens dentro do dia.
+- [x] Mover um item para outro dia.
 - [ ] Duplicar item e duplicar um dia inteiro.
 - [x] Itens sem data em uma caixa de ideias.
-- [ ] Blocos manhã, tarde e noite, além de horário exato.
+- [x] Blocos manhã, tarde e noite, além de horário exato.
 - [ ] Duração estimada e intervalo entre atividades.
-- [ ] Detectar choque de horários.
+- [x] Detectar choque de horários.
 - [ ] Detectar atividade fora do horário de funcionamento.
 - [ ] Permitir tempo livre intencional sem gerar alerta.
 - [ ] Observações, tags, prioridade e acessibilidade.
@@ -448,8 +448,8 @@ Ordem exata de implementação:
 2. [x] Criar seletor de viagem ativa, arquivar, duplicar e excluir.
 3. [x] Criar caixa de ideias sem data.
 4. [x] Permitir mover uma ideia para um dia.
-5. Implementar drag-and-drop e persistir `sortOrder`.
-6. Adicionar blocos manhã/tarde/noite e detecção de choque.
+5. [x] Implementar drag-and-drop e persistir `sortOrder`.
+6. [x] Adicionar blocos manhã/tarde/noite e detecção de choque.
 7. Adicionar opção de “tempo livre intencional”.
 8. Criar testes E2E desta jornada.
 9. Migrar a mesma estrutura para Room no Android.
@@ -471,6 +471,7 @@ Ordem exata de implementação:
 | 2026-08-10 | `gradlew assembleDebug` | **PASS** — APK debug gerado |
 | 2026-08-10 | `gradlew testDebugUnitTest assembleDebug` | **PASS** — APK instalado no aparelho `23049PCD8G` |
 | 2026-08-11 | `npm run build` | **PASS** — web React/Vite |
+| 2026-08-11 | `npm test` | **PASS** — 5 testes de migração e planejamento web |
 | 2026-08-11 | GitHub Actions Pages | **PASS** — publicação automática |
 
 ## Princípios permanentes
