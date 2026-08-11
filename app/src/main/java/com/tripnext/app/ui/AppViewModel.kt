@@ -72,7 +72,7 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     }
     fun scheduleIdea(idea: TripIdeaEntity, date: LocalDate, time: java.time.LocalTime) = viewModelScope.launch {
         val startsAt = date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        repository.saveEvent(ItineraryEventEntity(tripId = idea.tripId, title = idea.title, type = idea.type, startsAt = startsAt, location = idea.location, notes = idea.notes, estimatedCostMinor = idea.estimatedCostMinor, sourceUrl = idea.sourceUrl))
+        repository.saveEvent(ItineraryEventEntity(tripId = idea.tripId, title = idea.title, type = idea.type, startsAt = startsAt, location = idea.location, notes = idea.notes, estimatedCostMinor = idea.estimatedCostMinor, sourceUrl = idea.sourceUrl, latitude = idea.latitude, longitude = idea.longitude, placeId = idea.placeId))
         repository.deleteIdea(idea.id)
     }
     fun addExpense(amountMinor: Long, category: ExpenseCategory, description: String) = viewModelScope.launch {

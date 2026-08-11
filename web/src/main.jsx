@@ -1,84 +1,1787 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import {createRoot} from 'react-dom/client';
-import {Plane, Map, CalendarDays, ListChecks, Plus, Wallet, Hotel, Train, Route, CheckCircle2, Circle, ChevronRight, MapPin, Trash2, Pencil, Utensils, Ticket, Car, BedDouble, ExternalLink, Compass, X, Download, AlertTriangle, Lightbulb, Clock, Copy} from 'lucide-react';
-import './style.css';
-import './improvements.css';
-import './trips.css';
-import './ideas.css';
-import './schedule.css';
-import './archive.css';
-import './e2e-fixes.css';
-import {migrateStoredData,sortPlanItems,findConflictIds,movePlanItem,dayPart} from './planner.js';
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Plane,
+  Map,
+  CalendarDays,
+  ListChecks,
+  Plus,
+  Wallet,
+  Hotel,
+  Train,
+  Route,
+  CheckCircle2,
+  Circle,
+  ChevronRight,
+  MapPin,
+  Trash2,
+  Pencil,
+  Utensils,
+  Ticket,
+  Car,
+  BedDouble,
+  ExternalLink,
+  Compass,
+  X,
+  Download,
+  AlertTriangle,
+  Lightbulb,
+  Clock,
+  Copy,
+} from "lucide-react";
+import "./style.css";
+import "./improvements.css";
+import "./trips.css";
+import "./ideas.css";
+import "./schedule.css";
+import "./archive.css";
+import "./e2e-fixes.css";
+import {
+  migrateStoredData,
+  sortPlanItems,
+  findConflictIds,
+  movePlanItem,
+  dayPart,
+  buildRouteLegs,
+} from "./planner.js";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  Polyline,
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import "./map.css";
+import "./routes.css";
 
-const TYPES={
-  transporte:{label:'Transporte',icon:Train,color:'#2563eb'},
-  hospedagem:{label:'Hospedagem',icon:BedDouble,color:'#7c3aed'},
-  passeio:{label:'Passeio',icon:Ticket,color:'#ea580c'},
-  alimentacao:{label:'Alimentação',icon:Utensils,color:'#db2777'},
-  deslocamento:{label:'Deslocamento',icon:Car,color:'#0891b2'},
-  livre:{label:'Tempo livre',icon:Clock,color:'#64748b'},
-  outro:{label:'Outro',icon:MapPin,color:'#4d7c0f'}
+const TYPES = {
+  transporte: { label: "Transporte", icon: Train, color: "#2563eb" },
+  hospedagem: { label: "Hospedagem", icon: BedDouble, color: "#7c3aed" },
+  passeio: { label: "Passeio", icon: Ticket, color: "#ea580c" },
+  alimentacao: { label: "Alimentação", icon: Utensils, color: "#db2777" },
+  deslocamento: { label: "Deslocamento", icon: Car, color: "#0891b2" },
+  livre: { label: "Tempo livre", icon: Clock, color: "#64748b" },
+  outro: { label: "Outro", icon: MapPin, color: "#4d7c0f" },
 };
-const emptyTrip={name:'',destination:'',start:'',end:'',travelers:1,budget:0,itinerary:[],ideas:[],checklist:[]};
-const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v)||0);
-const pretty=d=>d?new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).replaceAll('.',''):'Data a definir';
-const iso=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`};
-const daysBetween=(start,end)=>{if(!start||!end)return[];const a=[];for(let d=new Date(`${start}T12:00:00`),z=new Date(`${end}T12:00:00`);d<=z;d.setDate(d.getDate()+1))a.push(iso(d));return a};
+const emptyTrip = {
+  name: "",
+  destination: "",
+  start: "",
+  end: "",
+  travelers: 1,
+  budget: 0,
+  itinerary: [],
+  ideas: [],
+  checklist: [],
+};
+const money = (v) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    Number(v) || 0,
+  );
+const pretty = (d) =>
+  d
+    ? new Date(`${d}T12:00:00`)
+        .toLocaleDateString("pt-BR", {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+        })
+        .replaceAll(".", "")
+    : "Data a definir";
+const iso = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+};
+const daysBetween = (start, end) => {
+  if (!start || !end) return [];
+  const a = [];
+  for (
+    let d = new Date(`${start}T12:00:00`), z = new Date(`${end}T12:00:00`);
+    d <= z;
+    d.setDate(d.getDate() + 1)
+  )
+    a.push(iso(d));
+  return a;
+};
 
-function App(){
- const [store,setStore]=useState(loadStore);
- const [tab,setTab]=useState('inicio'); const [modal,setModal]=useState(null); const [editing,setEditing]=useState(null); const [draftEvent,setDraftEvent]=useState(null);
- const trip=store.trips.find(t=>t.id===store.activeTripId&&!t.archived)||store.trips.find(t=>!t.archived)||null;
- useEffect(()=>{localStorage.setItem('tripnext-store',JSON.stringify(store));localStorage.removeItem('tripnext-trip')},[store]);
- const setTrip=next=>setStore(s=>({...s,trips:s.trips.map(t=>t.id===trip?.id?(typeof next==='function'?next(t):next):t)}));
- const update=patch=>setTrip(t=>({...t,...patch,updatedAt:new Date().toISOString()}));
- const createTrip=data=>{const item={...emptyTrip,...data,id:newId(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};setStore(s=>({...s,trips:[...s.trips,item],activeTripId:item.id}));setModal(null);setTab('inicio')};
- const duplicateTrip=()=>{const copy={...trip,id:newId(),name:`${trip.name} — cópia`,itinerary:(trip.itinerary||[]).map(x=>({...x})),checklist:(trip.checklist||[]).map(x=>({...x,done:false})),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};setStore(s=>({...s,trips:[...s.trips,copy],activeTripId:copy.id}));setTab('inicio')};
- const archiveTrip=()=>{if(!confirm(`Arquivar ${trip.name}?`))return;const remaining=store.trips.filter(t=>t.id!==trip.id&&!t.archived);setStore(s=>({...s,trips:s.trips.map(t=>t.id===trip.id?{...t,archived:true}:t),activeTripId:remaining[0]?.id||null}))};
- const saveEvent=e=>{const list=[...(trip.itinerary||[])];if(editing!==null)list[editing]={...e,id:list[editing].id||newId()};else list.push({...e,id:newId(),sortOrder:list.filter(x=>x.date===e.date).length});const patch={itinerary:list};if(draftEvent?.ideaId)patch.ideas=(trip.ideas||[]).filter(x=>x.id!==draftEvent.ideaId);update(patch);setModal(null);setEditing(null);setDraftEvent(null)};
- const openEdit=i=>{setEditing(i);setModal('event')};
- const dialogs=<>{modal==='newTrip'&&<TripModal onClose={()=>setModal(null)} onSave={createTrip}/>} {modal==='trip'&&<TripModal initial={trip} onClose={()=>setModal(null)} onSave={t=>{update(t);setModal(null)}}/>}{modal==='event'&&trip&&<EventModal trip={trip} initial={editing!==null?trip.itinerary[editing]:draftEvent} onClose={()=>{setModal(null);setEditing(null);setDraftEvent(null)}} onSave={saveEvent}/>} {modal==='idea'&&<IdeaModal onClose={()=>setModal(null)} onSave={x=>{update({ideas:[...(trip.ideas||[]),{...x,id:newId()}]});setModal(null)}}/>}{modal==='task'&&<TaskModal onClose={()=>setModal(null)} onSave={x=>{update({checklist:[...(trip.checklist||[]),x]});setModal(null)}}/>}</>;
- const restore=id=>setStore(s=>({...s,trips:s.trips.map(t=>t.id===id?{...t,archived:false}:t),activeTripId:id}));
- if(!trip)return <><Empty onCreate={()=>setModal('newTrip')} archived={store.trips.filter(t=>t.archived)} restore={restore}/>{dialogs}</>;
- return <><div className="shell"><Sidebar tab={tab} setTab={setTab} trip={trip} trips={store.trips.filter(t=>!t.archived)} select={id=>setStore(s=>({...s,activeTripId:id}))} create={()=>setModal('newTrip')}/><main>
-  {tab==='inicio'&&<Home trip={trip} go={setTab} open={setModal}/>} 
-  {tab==='itinerario'&&<Itinerary trip={trip} update={update} open={()=>{setEditing(null);setModal('event')}} edit={openEdit}/>} 
-  {tab==='ideias'&&<Ideas trip={trip} update={update} open={()=>setModal('idea')} schedule={idea=>{setDraftEvent({...idea,ideaId:idea.id,date:trip.start,time:'09:00',status:'pesquisar'});setModal('event')}}/>}
-  {tab==='custos'&&<Costs trip={trip} edit={openEdit}/>} 
-  {tab==='checklist'&&<Checklist trip={trip} update={update} open={()=>setModal('task')}/>} 
-  {tab==='ajustes'&&<SettingsPage trip={trip} archived={store.trips.filter(t=>t.archived)} restore={restore} edit={()=>setModal('trip')} duplicate={duplicateTrip} archive={archiveTrip} remove={()=>{if(confirm('Excluir esta viagem e todo o planejamento?'))setStore(s=>{const trips=s.trips.filter(t=>t.id!==trip.id),next=trips.find(t=>!t.archived);return {...s,trips,activeTripId:next?.id||null}})}}/>}
- </main></div>{dialogs}</>;
+function App() {
+  const [store, setStore] = useState(loadStore);
+  const [tab, setTab] = useState("inicio");
+  const [modal, setModal] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [draftEvent, setDraftEvent] = useState(null);
+  const trip =
+    store.trips.find((t) => t.id === store.activeTripId && !t.archived) ||
+    store.trips.find((t) => !t.archived) ||
+    null;
+  useEffect(() => {
+    localStorage.setItem("tripnext-store", JSON.stringify(store));
+    localStorage.removeItem("tripnext-trip");
+  }, [store]);
+  const setTrip = (next) =>
+    setStore((s) => ({
+      ...s,
+      trips: s.trips.map((t) =>
+        t.id === trip?.id ? (typeof next === "function" ? next(t) : next) : t,
+      ),
+    }));
+  const update = (patch) =>
+    setTrip((t) => ({ ...t, ...patch, updatedAt: new Date().toISOString() }));
+  const createTrip = (data) => {
+    const item = {
+      ...emptyTrip,
+      ...data,
+      id: newId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setStore((s) => ({
+      ...s,
+      trips: [...s.trips, item],
+      activeTripId: item.id,
+    }));
+    setModal(null);
+    setTab("inicio");
+  };
+  const duplicateTrip = () => {
+    const copy = {
+      ...trip,
+      id: newId(),
+      name: `${trip.name} — cópia`,
+      itinerary: (trip.itinerary || []).map((x) => ({ ...x })),
+      checklist: (trip.checklist || []).map((x) => ({ ...x, done: false })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setStore((s) => ({
+      ...s,
+      trips: [...s.trips, copy],
+      activeTripId: copy.id,
+    }));
+    setTab("inicio");
+  };
+  const archiveTrip = () => {
+    if (!confirm(`Arquivar ${trip.name}?`)) return;
+    const remaining = store.trips.filter(
+      (t) => t.id !== trip.id && !t.archived,
+    );
+    setStore((s) => ({
+      ...s,
+      trips: s.trips.map((t) =>
+        t.id === trip.id ? { ...t, archived: true } : t,
+      ),
+      activeTripId: remaining[0]?.id || null,
+    }));
+  };
+  const saveEvent = (e) => {
+    const list = [...(trip.itinerary || [])];
+    if (editing !== null)
+      list[editing] = { ...e, id: list[editing].id || newId() };
+    else
+      list.push({
+        ...e,
+        id: newId(),
+        sortOrder: list.filter((x) => x.date === e.date).length,
+      });
+    const patch = { itinerary: list };
+    if (draftEvent?.ideaId)
+      patch.ideas = (trip.ideas || []).filter(
+        (x) => x.id !== draftEvent.ideaId,
+      );
+    update(patch);
+    setModal(null);
+    setEditing(null);
+    setDraftEvent(null);
+  };
+  const openEdit = (i) => {
+    setEditing(i);
+    setModal("event");
+  };
+  const dialogs = (
+    <>
+      {modal === "newTrip" && (
+        <TripModal onClose={() => setModal(null)} onSave={createTrip} />
+      )}{" "}
+      {modal === "trip" && (
+        <TripModal
+          initial={trip}
+          onClose={() => setModal(null)}
+          onSave={(t) => {
+            update(t);
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "event" && trip && (
+        <EventModal
+          trip={trip}
+          initial={editing !== null ? trip.itinerary[editing] : draftEvent}
+          onClose={() => {
+            setModal(null);
+            setEditing(null);
+            setDraftEvent(null);
+          }}
+          onSave={saveEvent}
+        />
+      )}{" "}
+      {modal === "idea" && (
+        <IdeaModal
+          onClose={() => setModal(null)}
+          onSave={(x) => {
+            update({ ideas: [...(trip.ideas || []), { ...x, id: newId() }] });
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "task" && (
+        <TaskModal
+          onClose={() => setModal(null)}
+          onSave={(x) => {
+            update({ checklist: [...(trip.checklist || []), x] });
+            setModal(null);
+          }}
+        />
+      )}
+    </>
+  );
+  const restore = (id) =>
+    setStore((s) => ({
+      ...s,
+      trips: s.trips.map((t) => (t.id === id ? { ...t, archived: false } : t)),
+      activeTripId: id,
+    }));
+  if (!trip)
+    return (
+      <>
+        <Empty
+          onCreate={() => setModal("newTrip")}
+          archived={store.trips.filter((t) => t.archived)}
+          restore={restore}
+        />
+        {dialogs}
+      </>
+    );
+  return (
+    <>
+      <div className="shell">
+        <Sidebar
+          tab={tab}
+          setTab={setTab}
+          trip={trip}
+          trips={store.trips.filter((t) => !t.archived)}
+          select={(id) => setStore((s) => ({ ...s, activeTripId: id }))}
+          create={() => setModal("newTrip")}
+        />
+        <main>
+          {tab === "inicio" && <Home trip={trip} go={setTab} open={setModal} />}
+          {tab === "itinerario" && (
+            <Itinerary
+              trip={trip}
+              update={update}
+              open={() => {
+                setEditing(null);
+                setModal("event");
+              }}
+              edit={openEdit}
+            />
+          )}
+          {tab === "ideias" && (
+            <Ideas
+              trip={trip}
+              update={update}
+              open={() => setModal("idea")}
+              schedule={(idea) => {
+                setDraftEvent({
+                  ...idea,
+                  ideaId: idea.id,
+                  date: trip.start,
+                  time: "09:00",
+                  status: "pesquisar",
+                });
+                setModal("event");
+              }}
+            />
+          )}
+          {tab === "custos" && <Costs trip={trip} edit={openEdit} />}
+          {tab === "checklist" && (
+            <Checklist
+              trip={trip}
+              update={update}
+              open={() => setModal("task")}
+            />
+          )}
+          {tab === "ajustes" && (
+            <SettingsPage
+              trip={trip}
+              archived={store.trips.filter((t) => t.archived)}
+              restore={restore}
+              edit={() => setModal("trip")}
+              duplicate={duplicateTrip}
+              archive={archiveTrip}
+              remove={() => {
+                if (confirm("Excluir esta viagem e todo o planejamento?"))
+                  setStore((s) => {
+                    const trips = s.trips.filter((t) => t.id !== trip.id),
+                      next = trips.find((t) => !t.archived);
+                    return { ...s, trips, activeTripId: next?.id || null };
+                  });
+              }}
+            />
+          )}
+        </main>
+      </div>
+      {dialogs}
+    </>
+  );
 }
-function Sidebar({tab,setTab,trip,trips,select,create}){const items=[['inicio','Visão geral',Map],['itinerario','Roteiro',CalendarDays],['ideias','Ideias',Lightbulb],['custos','Custos previstos',Wallet],['checklist','Checklist',ListChecks],['ajustes','Ajustes',Compass]];return <aside><div className="brand"><span><Plane/></span><b>TripNext</b></div><div className="trip-switcher"><small>VIAGEM ATIVA</small><select value={trip.id} onChange={e=>select(e.target.value)}>{trips.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select><button onClick={create}><Plus/> Nova viagem</button></div><nav>{items.map(([id,l,I])=><button className={tab===id?'active':''} onClick={()=>setTab(id)} key={id}><I/>{l}</button>)}</nav><div className="profile"><i>J</i><div><b>Jefferson</b><small>{trips.length} viagem(ns)</small></div></div></aside>}
-function Empty({onCreate,archived=[],restore}){return <div className="empty"><div className="empty-card"><span className="big-icon"><Map/></span><p className="eyebrow">SEU PLANEJADOR DE VIAGEM</p><h1>Da ideia ao embarque.</h1><p>Defina as datas e monte cada dia com transportes, hospedagens, passeios, reservas e custos previstos.</p><button className="primary" onClick={onCreate}><Plus/> Começar a planejar</button>{archived.length>0&&<div className="archived-empty"><small>VIAGENS ARQUIVADAS</small>{archived.map(t=><button key={t.id} onClick={()=>restore(t.id)}>{t.name}<span>Restaurar</span></button>)}</div>}</div></div>}
-function Header({title,subtitle,action}){return <header><div><h1>{title}</h1><p>{subtitle}</p></div>{action}</header>}
-function Card({children,className='',onClick}){return <section className={`card ${className}`} onClick={onClick}>{children}</section>}
-function Home({trip,go,open}){const events=trip.itinerary||[],total=events.reduce((s,e)=>s+Number(e.cost||0),0),days=daysBetween(trip.start,trip.end),planned=new Set(events.map(e=>e.date)).size,next=[...events].sort(sortEvents)[0],emptyDays=days.filter(d=>!events.some(e=>e.date===d)).length,pending=events.filter(e=>e.status!=='reservado'&&['transporte','hospedagem','passeio'].includes(e.type)).length;const insights=[!events.some(e=>e.type==='transporte')&&'Defina como chegar ao destino',!events.some(e=>e.type==='hospedagem')&&'Inclua sua hospedagem no roteiro',emptyDays>0&&`${emptyDays} dia(s) ainda sem programação`,pending>0&&`${pending} reserva(s) ainda precisam de atenção`].filter(Boolean);return <div className="page"><Header title="Sua próxima viagem" subtitle="Planeje primeiro. Embarque tranquilo." action={<button className="outline" onClick={()=>open('trip')}><Pencil/> Editar viagem</button>}/><section className="boarding"><div><small>PLANO DE VIAGEM</small><h2>{trip.name}</h2><p><MapPin/> {trip.destination}</p></div><Plane/><div className="dates">{pretty(trip.start)} — {pretty(trip.end)} · {days.length} dias</div><div className="barcode"/></section><div className="stats"><Card><small>DIAS PLANEJADOS</small><strong>{planned} <i>/ {days.length}</i></strong><span>{events.length} itens no roteiro</span></Card><Card><small>CUSTO PREVISTO</small><strong>{money(total)}</strong><span>{trip.budget?`${money(Math.max(0,trip.budget-total))} livres no teto`:'Defina um teto se quiser'}</span></Card><Card><small>RESERVAS PENDENTES</small><strong>{pending}</strong><span>{pending?'Ainda precisam de decisão':'Tudo encaminhado'}</span></Card></div><div className="home-grid"><div><div className="section-head"><h3>Próximo passo</h3><button onClick={()=>go('itinerario')}>Ver roteiro <ChevronRight/></button></div><Card className="next-step" onClick={()=>go('itinerario')}>{next?<><TypeIcon type={next.type}/><div><small>{pretty(next.date)} · {next.time}</small><h3>{next.title}</h3><p>{next.location||'Local ainda não definido'}</p></div></>:<><TypeIcon type="passeio"/><div><small>COMECE POR AQUI</small><h3>Monte o primeiro dia</h3><p>Adicione como você vai chegar, onde ficará e o primeiro passeio.</p></div></>}</Card>{insights.length>0&&<Card className="diagnosis"><h3><AlertTriangle/> Para fechar o plano</h3>{insights.map(x=><button key={x} onClick={()=>go('itinerario')}><Circle/>{x}<ChevronRight/></button>)}</Card>}</div><div><h3 className="section-title">Adicionar ao plano</h3><div className="quick-actions"><button onClick={()=>open('event')}><Train/> Transporte</button><button onClick={()=>open('event')}><Hotel/> Hospedagem</button><button onClick={()=>open('event')}><Ticket/> Passeio</button></div></div></div></div>}
-function TypeIcon({type}){const t=TYPES[type]||TYPES.outro,I=t.icon;return <span className="type-icon" style={{background:`${t.color}18`,color:t.color}}><I/></span>}
-function Itinerary({trip,update,open,edit}){
- const days=daysBetween(trip.start,trip.end),[selected,setSelected]=useState(days[0]||''),[dragging,setDragging]=useState(null),[copyOpen,setCopyOpen]=useState(false),[copyTarget,setCopyTarget]=useState(days[1]||days[0]||'');
- const all=trip.itinerary||[],events=sortPlanItems(all.map((e,i)=>({...e,_index:i})).filter(e=>e.date===selected)),conflicts=findConflictIds(all);
- const remove=i=>confirm('Remover este item do roteiro?')&&update({itinerary:all.filter((_,n)=>n!==i)});
- const move=(id,date,index)=>update({itinerary:movePlanItem(all,id,date,index)});
- const duplicateDay=()=>{const source=sortPlanItems(all.filter(x=>x.date===selected)),offset=all.filter(x=>x.date===copyTarget).length,copies=source.map((x,i)=>({...x,id:newId(),date:copyTarget,sortOrder:offset+i,status:x.status==='reservado'?'pesquisar':x.status,booking:''}));update({itinerary:[...all,...copies]});setCopyOpen(false);setSelected(copyTarget)};
- return <div className="page"><Header title="Roteiro por dia" subtitle={`${trip.destination} · ${days.length} dias`} action={<div className="header-actions"><button className="outline small" disabled={!events.length||days.length<2} onClick={()=>{setCopyTarget(days.find(d=>d!==selected)||selected);setCopyOpen(true)}}><Copy/> Duplicar dia</button><button className="outline small" onClick={()=>exportCalendar(trip)}><Download/> Calendário</button><button className="primary small" onClick={open}><Plus/> Adicionar</button></div>}/>
- <div className="day-strip">{days.map((d,i)=><button key={d} className={selected===d?'active':''} onClick={()=>setSelected(d)} onDragOver={e=>e.preventDefault()} onDrop={()=>{if(dragging){move(dragging,d,all.filter(x=>x.date===d).length);setDragging(null);setSelected(d)}}}><small>DIA {i+1}</small><b>{new Date(`${d}T12:00`).getDate()}</b><span>{new Date(`${d}T12:00`).toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','')}</span><i>{all.filter(e=>e.date===d).length||''}</i></button>)}</div>
- {conflicts.size>0&&events.some(e=>conflicts.has(e.id))&&<div className="conflict-banner"><AlertTriangle/><div><b>Há horários sobrepostos neste dia</b><span>Revise os itens destacados antes de fechar o roteiro.</span></div></div>}
- {events.length===0?<Blank icon={Route} title="Este dia está livre" text="Planeje deslocamentos, refeições, passeios ou deixe um tempo livre." action={open}/>:<div className="timeline">{events.map((e,index)=><React.Fragment key={e.id}>{index===0||dayPart(events[index-1].time)!==dayPart(e.time)?<h4 className="day-part">{dayPart(e.time)}</h4>:null}<article draggable onDragStart={()=>setDragging(e.id)} onDragEnd={()=>setDragging(null)} onDragOver={x=>x.preventDefault()} onDrop={x=>{x.preventDefault();if(dragging&&dragging!==e.id)move(dragging,selected,index)}} className={conflicts.has(e.id)?'has-conflict':''}><time>{e.time||'—'}<small>{e.duration?`${e.duration} min`:''}</small></time><TypeIcon type={e.type}/><Card><div className="event-top"><div><span className="tag">{TYPES[e.type]?.label||'Outro'}</span><span className={`status ${e.status||'pesquisar'}`}>{statusLabel(e.status)}</span>{conflicts.has(e.id)&&<span className="conflict-tag">Conflito</span>}</div><div><button className="icon-btn" onClick={()=>edit(e._index)}><Pencil/></button><button className="icon-btn danger-icon" onClick={()=>remove(e._index)}><Trash2/></button></div></div><h3>{e.title}</h3>{e.location&&<p><MapPin/> {e.location} <a className="map-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.location)}`} target="_blank" rel="noreferrer">Ver mapa</a></p>}{e.notes&&<p className="notes">{e.notes}</p>}<footer>{Number(e.cost)>0&&<b>{money(e.cost)}</b>}{e.booking&&<span><CheckCircle2/> {e.booking}</span>}{e.link&&<a href={e.link} target="_blank" rel="noreferrer"><ExternalLink/> Abrir reserva</a>}<label className="move-day">Mover para <select value={e.date} onChange={x=>{move(e.id,x.target.value,all.filter(y=>y.date===x.target.value).length);setSelected(x.target.value)}}>{days.map((d,i)=><option value={d} key={d}>Dia {i+1}</option>)}</select></label></footer></Card></article></React.Fragment>)}</div>}{copyOpen&&<Modal title="Duplicar este dia" close={()=>setCopyOpen(false)}><div className="fields"><p>Os {events.length} itens serão copiados sem códigos de reserva. Os originais permanecem neste dia.</p><label>Copiar para<select value={copyTarget} onChange={e=>setCopyTarget(e.target.value)}>{days.filter(d=>d!==selected).map((d,i)=><option value={d} key={d}>{pretty(d)}</option>)}</select></label><button className="primary" onClick={duplicateDay}>Duplicar planejamento</button></div></Modal>}</div>
+function Sidebar({ tab, setTab, trip, trips, select, create }) {
+  const items = [
+    ["inicio", "Visão geral", Map],
+    ["itinerario", "Roteiro", CalendarDays],
+    ["ideias", "Ideias", Lightbulb],
+    ["custos", "Custos previstos", Wallet],
+    ["checklist", "Checklist", ListChecks],
+    ["ajustes", "Ajustes", Compass],
+  ];
+  return (
+    <aside>
+      <div className="brand">
+        <span>
+          <Plane />
+        </span>
+        <b>TripNext</b>
+      </div>
+      <div className="trip-switcher">
+        <small>VIAGEM ATIVA</small>
+        <select value={trip.id} onChange={(e) => select(e.target.value)}>
+          {trips.map((t) => (
+            <option value={t.id} key={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <button onClick={create}>
+          <Plus /> Nova viagem
+        </button>
+      </div>
+      <nav>
+        {items.map(([id, l, I]) => (
+          <button
+            className={tab === id ? "active" : ""}
+            onClick={() => setTab(id)}
+            key={id}
+          >
+            <I />
+            {l}
+          </button>
+        ))}
+      </nav>
+      <div className="profile">
+        <i>J</i>
+        <div>
+          <b>Jefferson</b>
+          <small>{trips.length} viagem(ns)</small>
+        </div>
+      </div>
+    </aside>
+  );
 }
-function Ideas({trip,update,open,schedule}){const ideas=trip.ideas||[],remove=id=>update({ideas:ideas.filter(x=>x.id!==id)});return <div className="page"><Header title="Caixa de ideias" subtitle="Guarde possibilidades antes de decidir o dia" action={<button className="primary small" onClick={open}><Plus/> Nova ideia</button>}/>{!ideas.length?<Blank icon={Lightbulb} title="Salve o que chamou sua atenção" text="Passeios, restaurantes, bairros e qualquer possibilidade podem ficar aqui até você decidir." action={open}/>:<div className="idea-grid">{ideas.map(idea=><Card key={idea.id} className="idea-card"><div className="event-top"><TypeIcon type={idea.type}/><button className="icon-btn danger-icon" onClick={()=>remove(idea.id)}><Trash2/></button></div><span className="tag">{TYPES[idea.type]?.label}</span><h3>{idea.title}</h3>{idea.location&&<p><MapPin/> {idea.location}</p>}{idea.notes&&<p className="notes">{idea.notes}</p>}<footer>{Number(idea.cost)>0&&<b>{money(idea.cost)}</b>}{idea.link&&<a href={idea.link} target="_blank" rel="noreferrer"><ExternalLink/> Fonte</a>}</footer><button className="outline schedule" onClick={()=>schedule(idea)}><CalendarDays/> Colocar no roteiro</button></Card>)}</div>}</div>}
-function Costs({trip,edit}){const events=trip.itinerary||[],total=events.reduce((s,e)=>s+Number(e.cost||0),0);const groups=Object.entries(TYPES).map(([id,t])=>({id,...t,total:events.filter(e=>e.type===id).reduce((s,e)=>s+Number(e.cost||0),0)})).filter(x=>x.total);return <div className="page"><Header title="Custos previstos" subtitle="Uma estimativa do que será necessário para a viagem"/><div className="cost-hero"><div><small>TOTAL PLANEJADO</small><h2>{money(total)}</h2><p>{trip.travelers||1} viajante(s) · {money(total/(trip.travelers||1))} por pessoa</p></div>{trip.budget>0&&<div><small>TETO DEFINIDO</small><h3>{money(trip.budget)}</h3><div className="progress"><i style={{width:`${Math.min(100,total/trip.budget*100)}%`}}/></div><p>{total>trip.budget?`${money(total-trip.budget)} acima do teto`:`${money(trip.budget-total)} disponíveis`}</p></div>}</div><div className="cost-grid">{groups.length?groups.map(g=><Card key={g.id}><TypeIcon type={g.id}/><div><span>{g.label}</span><strong>{money(g.total)}</strong><small>{Math.round(g.total/total*100)}% do previsto</small></div></Card>):<Blank icon={Wallet} title="Nenhum custo previsto" text="Ao adicionar itens ao roteiro, informe os valores estimados."/>}</div><h3 className="section-title">Itens com custo</h3><Card className="cost-list">{events.filter(e=>Number(e.cost)>0).sort((a,b)=>Number(b.cost)-Number(a.cost)).map((e,i)=><button key={i} onClick={()=>edit(trip.itinerary.indexOf(e))}><TypeIcon type={e.type}/><div><b>{e.title}</b><small>{pretty(e.date)} · {TYPES[e.type]?.label}</small></div><strong>{money(e.cost)}</strong><ChevronRight/></button>)}</Card></div>}
-function Checklist({trip,update,open}){const list=trip.checklist||[],toggle=i=>update({checklist:list.map((x,n)=>n===i?{...x,done:!x.done}:x)}),remove=i=>update({checklist:list.filter((_,n)=>n!==i)});return <div className="page"><Header title="Antes de viajar" subtitle={`${list.filter(x=>x.done).length}/${list.length} tarefas concluídas`} action={<button className="primary small" onClick={open}><Plus/> Nova tarefa</button>}/>{!list.length?<Blank icon={ListChecks} title="Prepare sua viagem" text="Adicione documentos, reservas, mala e tudo que precisa resolver antes de sair." action={open}/>:<Card className="list">{list.map((x,i)=><div className="task" key={i}><button onClick={()=>toggle(i)}>{x.done?<CheckCircle2 className="ok"/>:<Circle/>}<span><b className={x.done?'done':''}>{x.name}</b><small>{x.category}</small></span></button><button className="icon-btn danger-icon" onClick={()=>remove(i)}><X/></button></div>)}</Card>}</div>}
-function SettingsPage({trip,archived,restore,edit,duplicate,archive,remove}){return <div className="page"><Header title="Configurações da viagem" subtitle={trip.name}/><Card className="settings"><button onClick={edit}><span><b>Dados da viagem</b><small>Destino, datas, viajantes e teto previsto</small></span><ChevronRight/></button><button onClick={duplicate}><span><b>Duplicar viagem</b><small>Cria uma cópia independente deste planejamento</small></span><ChevronRight/></button><button onClick={archive}><span><b>Arquivar viagem</b><small>Retira da lista ativa sem apagar os dados</small></span><ChevronRight/></button><div><b>Armazenamento</b><span>Neste dispositivo</span></div></Card>{archived.length>0&&<><h3 className="section-title">Viagens arquivadas</h3><Card className="archived-list">{archived.map(t=><button key={t.id} onClick={()=>restore(t.id)}><span><b>{t.name}</b><small>{t.destination}</small></span><strong>Restaurar</strong></button>)}</Card></>}<button className="danger" onClick={remove}><Trash2/> Excluir definitivamente</button></div>}
-function Blank({icon:I,title,text,action}){return <div className="blank"><span><I/></span><h2>{title}</h2><p>{text}</p>{action&&<button className="outline" onClick={action}><Plus/> Adicionar item</button>}</div>}
-function TripModal({initial,onClose,onSave}){const [f,setF]=useState({name:initial?.name||'',destination:initial?.destination||'',start:initial?.start||'',end:initial?.end||'',travelers:initial?.travelers||1,budget:initial?.budget||''});const valid=f.name&&f.destination&&f.start&&f.end&&f.end>=f.start;return <Modal title={initial?'Editar viagem':'Nova viagem'} close={onClose}><div className="fields"><label>Nome do plano<input value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Férias de julho"/></label><label>Para onde você vai?<input value={f.destination} onChange={e=>setF({...f,destination:e.target.value})} placeholder="Buenos Aires, Argentina"/></label><div><label>Data de ida<input type="date" value={f.start} onChange={e=>setF({...f,start:e.target.value})}/></label><label>Data de volta<input type="date" min={f.start} value={f.end} onChange={e=>setF({...f,end:e.target.value})}/></label></div><div><label>Viajantes<input type="number" min="1" value={f.travelers} onChange={e=>setF({...f,travelers:Number(e.target.value)})}/></label><label>Teto previsto (opcional)<input type="number" min="0" value={f.budget} onChange={e=>setF({...f,budget:Number(e.target.value)})} placeholder="R$ 0"/></label></div><button className="primary" disabled={!valid} onClick={()=>onSave(f)}>{initial?'Salvar alterações':'Criar meu planejamento'}</button></div></Modal>}
-function EventModal({trip,initial,onClose,onSave}){const [f,setF]=useState(initial||{type:'transporte',status:'pesquisar',title:'',location:'',date:trip.start,time:'09:00',duration:'',cost:'',booking:'',link:'',notes:''});const set=(k,v)=>setF(x=>({...x,[k]:v}));return <Modal title={initial?'Editar item':'Adicionar ao roteiro'} close={onClose}><div className="fields"><div><label>Tipo<select value={f.type} onChange={e=>set('type',e.target.value)}>{Object.entries(TYPES).map(([id,t])=><option value={id} key={id}>{t.label}</option>)}</select></label><label>Situação<select value={f.status||'pesquisar'} onChange={e=>set('status',e.target.value)}><option value="pesquisar">Ainda pesquisando</option><option value="reservar">Precisa reservar</option><option value="reservado">Reservado</option><option value="gratuito">Não precisa reservar</option></select></label></div><label>O que está planejando?<input value={f.title} onChange={e=>set('title',e.target.value)} placeholder="Voo para Buenos Aires, Museu, jantar..."/></label><label>Local / endereço<input value={f.location||''} onChange={e=>set('location',e.target.value)} placeholder="Aeroporto, hotel ou ponto de encontro"/></label><div><label>Data<input type="date" min={trip.start} max={trip.end} value={f.date} onChange={e=>set('date',e.target.value)}/></label><label>Horário<input type="time" value={f.time||''} onChange={e=>set('time',e.target.value)}/></label></div><div><label>Duração (minutos)<input type="number" min="0" value={f.duration||''} onChange={e=>set('duration',e.target.value)}/></label><label>Custo previsto total<input type="number" min="0" value={f.cost||''} onChange={e=>set('cost',e.target.value)} placeholder="0"/></label></div><label>Reserva / confirmação<input value={f.booking||''} onChange={e=>set('booking',e.target.value)} placeholder="Código da reserva ou informação útil"/></label><label>Link útil<input type="url" value={f.link||''} onChange={e=>set('link',e.target.value)} placeholder="https://..."/></label><label>Observações<textarea value={f.notes||''} onChange={e=>set('notes',e.target.value)} placeholder="O que você precisa lembrar?"/></label><button className="primary" disabled={!f.title||!f.date} onClick={()=>onSave({...f,cost:Number(f.cost)||0,duration:Number(f.duration)||0})}>{initial?'Salvar item':'Adicionar ao plano'}</button></div></Modal>}
-function TaskModal({onClose,onSave}){const [name,setName]=useState(''),[category,setCategory]=useState('Documentos');return <Modal title="Nova tarefa" close={onClose}><div className="fields"><label>O que precisa resolver?<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="Comprar seguro viagem"/></label><label>Categoria<select value={category} onChange={e=>setCategory(e.target.value)}><option>Documentos</option><option>Reservas</option><option>Mala</option><option>Saúde</option><option>Transporte</option><option>Outros</option></select></label><button className="primary" disabled={!name} onClick={()=>onSave({name,category,done:false})}>Adicionar tarefa</button></div></Modal>}
-function IdeaModal({onClose,onSave}){const [f,setF]=useState({type:'passeio',title:'',location:'',cost:'',link:'',notes:''}),set=(k,v)=>setF(x=>({...x,[k]:v}));return <Modal title="Guardar uma ideia" close={onClose}><div className="fields"><label>Tipo<select value={f.type} onChange={e=>set('type',e.target.value)}>{Object.entries(TYPES).map(([id,t])=><option value={id} key={id}>{t.label}</option>)}</select></label><label>Nome da ideia<input autoFocus value={f.title} onChange={e=>set('title',e.target.value)} placeholder="Museu, restaurante, bate-volta..."/></label><label>Local<input value={f.location} onChange={e=>set('location',e.target.value)} placeholder="Bairro, cidade ou endereço"/></label><label>Preço estimado<input type="number" min="0" value={f.cost} onChange={e=>set('cost',e.target.value)}/></label><label>Link da pesquisa<input type="url" value={f.link} onChange={e=>set('link',e.target.value)} placeholder="https://..."/></label><label>Por que salvar?<textarea value={f.notes} onChange={e=>set('notes',e.target.value)} placeholder="Detalhes, prós, restrições..."/></label><button className="primary" disabled={!f.title} onClick={()=>onSave({...f,cost:Number(f.cost)||0})}>Guardar ideia</button></div></Modal>}
-function Modal({title,close,children}){return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&close()}><div className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={close}>×</button></div>{children}</div></div>}
-function sortEvents(a,b){return `${a.date}${String(a.sortOrder??0).padStart(4,'0')}${a.time||''}`.localeCompare(`${b.date}${String(b.sortOrder??0).padStart(4,'0')}${b.time||''}`)}
-function statusLabel(status){return {pesquisar:'Pesquisando',reservar:'Reservar',reservado:'Reservado',gratuito:'Sem reserva'}[status||'pesquisar']}
-function newId(){return globalThis.crypto?.randomUUID?.()||`trip-${Date.now()}-${Math.random().toString(36).slice(2)}`}
-function loadStore(){return migrateStoredData(localStorage.getItem('tripnext-store'),localStorage.getItem('tripnext-trip'),newId)}
-function exportCalendar(trip){const esc=v=>String(v||'').replaceAll('\\','\\\\').replaceAll('\n','\\n').replaceAll(',','\\,').replaceAll(';','\\;'),stamp=d=>d.toISOString().replaceAll('-','').replaceAll(':','').replace(/\.\d{3}Z$/,'Z'),local=d=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}00`;const body=(trip.itinerary||[]).sort(sortEvents).map((e,i)=>{const start=new Date(`${e.date}T${e.time||'09:00'}:00`),end=new Date(start.getTime()+(Number(e.duration)||60)*60000);return ['BEGIN:VEVENT',`UID:tripnext-${e.date}-${i}@tripnext`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${local(start)}`,`DTEND:${local(end)}`,`SUMMARY:${esc(e.title)}`,`LOCATION:${esc(e.location)}`,`DESCRIPTION:${esc([e.notes,e.booking,e.link].filter(Boolean).join(' | '))}`,'END:VEVENT'].join('\r\n')}).join('\r\n');const file=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TripNext//Planejador//PT','CALSCALE:GREGORIAN',body,'END:VCALENDAR'].join('\r\n'),url=URL.createObjectURL(new Blob([file],{type:'text/calendar;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`${trip.name.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-roteiro.ics`;a.click();URL.revokeObjectURL(url)}
-createRoot(document.getElementById('root')).render(<App/>);
+function Empty({ onCreate, archived = [], restore }) {
+  return (
+    <div className="empty">
+      <div className="empty-card">
+        <span className="big-icon">
+          <Map />
+        </span>
+        <p className="eyebrow">SEU PLANEJADOR DE VIAGEM</p>
+        <h1>Da ideia ao embarque.</h1>
+        <p>
+          Defina as datas e monte cada dia com transportes, hospedagens,
+          passeios, reservas e custos previstos.
+        </p>
+        <button className="primary" onClick={onCreate}>
+          <Plus /> Começar a planejar
+        </button>
+        {archived.length > 0 && (
+          <div className="archived-empty">
+            <small>VIAGENS ARQUIVADAS</small>
+            {archived.map((t) => (
+              <button key={t.id} onClick={() => restore(t.id)}>
+                {t.name}
+                <span>Restaurar</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+function Header({ title, subtitle, action }) {
+  return (
+    <header>
+      <div>
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+      {action}
+    </header>
+  );
+}
+function Card({ children, className = "", onClick }) {
+  return (
+    <section className={`card ${className}`} onClick={onClick}>
+      {children}
+    </section>
+  );
+}
+function Home({ trip, go, open }) {
+  const events = trip.itinerary || [],
+    total = events.reduce((s, e) => s + Number(e.cost || 0), 0),
+    days = daysBetween(trip.start, trip.end),
+    planned = new Set(events.map((e) => e.date)).size,
+    next = [...events].sort(sortEvents)[0],
+    emptyDays = days.filter((d) => !events.some((e) => e.date === d)).length,
+    pending = events.filter(
+      (e) =>
+        e.status !== "reservado" &&
+        ["transporte", "hospedagem", "passeio"].includes(e.type),
+    ).length;
+  const insights = [
+    !events.some((e) => e.type === "transporte") &&
+      "Defina como chegar ao destino",
+    !events.some((e) => e.type === "hospedagem") &&
+      "Inclua sua hospedagem no roteiro",
+    emptyDays > 0 && `${emptyDays} dia(s) ainda sem programação`,
+    pending > 0 && `${pending} reserva(s) ainda precisam de atenção`,
+  ].filter(Boolean);
+  return (
+    <div className="page">
+      <Header
+        title="Sua próxima viagem"
+        subtitle="Planeje primeiro. Embarque tranquilo."
+        action={
+          <button className="outline" onClick={() => open("trip")}>
+            <Pencil /> Editar viagem
+          </button>
+        }
+      />
+      <section className="boarding">
+        <div>
+          <small>PLANO DE VIAGEM</small>
+          <h2>{trip.name}</h2>
+          <p>
+            <MapPin /> {trip.destination}
+          </p>
+        </div>
+        <Plane />
+        <div className="dates">
+          {pretty(trip.start)} — {pretty(trip.end)} · {days.length} dias
+        </div>
+        <div className="barcode" />
+      </section>
+      <div className="stats">
+        <Card>
+          <small>DIAS PLANEJADOS</small>
+          <strong>
+            {planned} <i>/ {days.length}</i>
+          </strong>
+          <span>{events.length} itens no roteiro</span>
+        </Card>
+        <Card>
+          <small>CUSTO PREVISTO</small>
+          <strong>{money(total)}</strong>
+          <span>
+            {trip.budget
+              ? `${money(Math.max(0, trip.budget - total))} livres no teto`
+              : "Defina um teto se quiser"}
+          </span>
+        </Card>
+        <Card>
+          <small>RESERVAS PENDENTES</small>
+          <strong>{pending}</strong>
+          <span>
+            {pending ? "Ainda precisam de decisão" : "Tudo encaminhado"}
+          </span>
+        </Card>
+      </div>
+      <div className="home-grid">
+        <div>
+          <div className="section-head">
+            <h3>Próximo passo</h3>
+            <button onClick={() => go("itinerario")}>
+              Ver roteiro <ChevronRight />
+            </button>
+          </div>
+          <Card className="next-step" onClick={() => go("itinerario")}>
+            {next ? (
+              <>
+                <TypeIcon type={next.type} />
+                <div>
+                  <small>
+                    {pretty(next.date)} · {next.time}
+                  </small>
+                  <h3>{next.title}</h3>
+                  <p>{next.location || "Local ainda não definido"}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <TypeIcon type="passeio" />
+                <div>
+                  <small>COMECE POR AQUI</small>
+                  <h3>Monte o primeiro dia</h3>
+                  <p>
+                    Adicione como você vai chegar, onde ficará e o primeiro
+                    passeio.
+                  </p>
+                </div>
+              </>
+            )}
+          </Card>
+          {insights.length > 0 && (
+            <Card className="diagnosis">
+              <h3>
+                <AlertTriangle /> Para fechar o plano
+              </h3>
+              {insights.map((x) => (
+                <button key={x} onClick={() => go("itinerario")}>
+                  <Circle />
+                  {x}
+                  <ChevronRight />
+                </button>
+              ))}
+            </Card>
+          )}
+        </div>
+        <div>
+          <h3 className="section-title">Adicionar ao plano</h3>
+          <div className="quick-actions">
+            <button onClick={() => open("event")}>
+              <Train /> Transporte
+            </button>
+            <button onClick={() => open("event")}>
+              <Hotel /> Hospedagem
+            </button>
+            <button onClick={() => open("event")}>
+              <Ticket /> Passeio
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function TypeIcon({ type }) {
+  const t = TYPES[type] || TYPES.outro,
+    I = t.icon;
+  return (
+    <span
+      className="type-icon"
+      style={{ background: `${t.color}18`, color: t.color }}
+    >
+      <I />
+    </span>
+  );
+}
+function TripMap({ events }) {
+  const [mode, setMode] = useState("walking");
+  const located = events.filter(
+      (e) => Number.isFinite(e.latitude) && Number.isFinite(e.longitude),
+    ),
+    legs = buildRouteLegs(events, mode);
+  if (!located.length)
+    return (
+      <div className="map-empty">
+        <Map />
+        <div>
+          <b>Confirme os lugares para vê-los no mapa</b>
+          <span>
+            Edite um item, busque o endereço e selecione um resultado.
+          </span>
+        </div>
+      </div>
+    );
+  const positions = located.map((e) => [e.latitude, e.longitude]);
+  return (
+    <section className="map-section">
+      <div className="map-toolbar">
+        <b>Mapa do dia</b>
+        <div>
+          {[
+            ["walking", "A pé"],
+            ["cycling", "Bicicleta"],
+            ["driving", "Carro"],
+            ["transit", "Transporte"],
+          ].map(([id, label]) => (
+            <button
+              className={mode === id ? "active" : ""}
+              onClick={() => setMode(id)}
+              key={id}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="trip-map">
+        <MapContainer
+          key={positions.map((p) => p.join(",")).join(";")}
+          center={positions[0]}
+          zoom={13}
+          scrollWheelZoom={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {positions.length > 1 && (
+            <Polyline
+              positions={positions}
+              pathOptions={{ color: "#3f7d00", weight: 3, dashArray: "7 7" }}
+            />
+          )}
+          {located.map((event, index) => (
+            <CircleMarker
+              key={event.id}
+              center={[event.latitude, event.longitude]}
+              radius={12}
+              pathOptions={{
+                color: TYPES[event.type]?.color || "#4d7c0f",
+                fillOpacity: 0.9,
+              }}
+            >
+              <Popup>
+                <b>
+                  {index + 1}. {event.title}
+                </b>
+                <br />
+                {event.location}
+              </Popup>
+            </CircleMarker>
+          ))}
+        </MapContainer>
+        <span className="map-note">
+          Linha indica a ordem, não a rota viária.
+        </span>
+      </div>
+      {legs.length > 0 && (
+        <div className="route-legs">
+          {legs.map((leg, index) => (
+            <div key={`${leg.fromId}-${leg.toId}`}>
+              <i>{index + 1}</i>
+              <span>
+                <b>
+                  {leg.fromTitle} → {leg.toTitle}
+                </b>
+                <small>
+                  {leg.distanceKm.toFixed(1)} km em linha reta · cerca de{" "}
+                  {leg.durationMinutes} min*
+                </small>
+              </span>
+            </div>
+          ))}
+          <p>
+            *Estimativa inicial. A rota real será integrada ao provedor de
+            direções.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+function Itinerary({ trip, update, open, edit }) {
+  const days = daysBetween(trip.start, trip.end),
+    [selected, setSelected] = useState(days[0] || ""),
+    [dragging, setDragging] = useState(null),
+    [copyOpen, setCopyOpen] = useState(false),
+    [copyTarget, setCopyTarget] = useState(days[1] || days[0] || "");
+  const all = trip.itinerary || [],
+    events = sortPlanItems(
+      all
+        .map((e, i) => ({ ...e, _index: i }))
+        .filter((e) => e.date === selected),
+    ),
+    conflicts = findConflictIds(all);
+  const remove = (i) =>
+    confirm("Remover este item do roteiro?") &&
+    update({ itinerary: all.filter((_, n) => n !== i) });
+  const move = (id, date, index) =>
+    update({ itinerary: movePlanItem(all, id, date, index) });
+  const duplicateDay = () => {
+    const source = sortPlanItems(all.filter((x) => x.date === selected)),
+      offset = all.filter((x) => x.date === copyTarget).length,
+      copies = source.map((x, i) => ({
+        ...x,
+        id: newId(),
+        date: copyTarget,
+        sortOrder: offset + i,
+        status: x.status === "reservado" ? "pesquisar" : x.status,
+        booking: "",
+      }));
+    update({ itinerary: [...all, ...copies] });
+    setCopyOpen(false);
+    setSelected(copyTarget);
+  };
+  return (
+    <div className="page">
+      <Header
+        title="Roteiro por dia"
+        subtitle={`${trip.destination} · ${days.length} dias`}
+        action={
+          <div className="header-actions">
+            <button
+              className="outline small"
+              disabled={!events.length || days.length < 2}
+              onClick={() => {
+                setCopyTarget(days.find((d) => d !== selected) || selected);
+                setCopyOpen(true);
+              }}
+            >
+              <Copy /> Duplicar dia
+            </button>
+            <button
+              className="outline small"
+              onClick={() => exportCalendar(trip)}
+            >
+              <Download /> Calendário
+            </button>
+            <button className="primary small" onClick={open}>
+              <Plus /> Adicionar
+            </button>
+          </div>
+        }
+      />
+      <div className="day-strip">
+        {days.map((d, i) => (
+          <button
+            key={d}
+            className={selected === d ? "active" : ""}
+            onClick={() => setSelected(d)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => {
+              if (dragging) {
+                move(dragging, d, all.filter((x) => x.date === d).length);
+                setDragging(null);
+                setSelected(d);
+              }
+            }}
+          >
+            <small>DIA {i + 1}</small>
+            <b>{new Date(`${d}T12:00`).getDate()}</b>
+            <span>
+              {new Date(`${d}T12:00`)
+                .toLocaleDateString("pt-BR", { weekday: "short" })
+                .replace(".", "")}
+            </span>
+            <i>{all.filter((e) => e.date === d).length || ""}</i>
+          </button>
+        ))}
+      </div>
+      <TripMap events={events} />
+      {conflicts.size > 0 && events.some((e) => conflicts.has(e.id)) && (
+        <div className="conflict-banner">
+          <AlertTriangle />
+          <div>
+            <b>Há horários sobrepostos neste dia</b>
+            <span>Revise os itens destacados antes de fechar o roteiro.</span>
+          </div>
+        </div>
+      )}
+      {events.length === 0 ? (
+        <Blank
+          icon={Route}
+          title="Este dia está livre"
+          text="Planeje deslocamentos, refeições, passeios ou deixe um tempo livre."
+          action={open}
+        />
+      ) : (
+        <div className="timeline">
+          {events.map((e, index) => (
+            <React.Fragment key={e.id}>
+              {index === 0 ||
+              dayPart(events[index - 1].time) !== dayPart(e.time) ? (
+                <h4 className="day-part">{dayPart(e.time)}</h4>
+              ) : null}
+              <article
+                draggable
+                onDragStart={() => setDragging(e.id)}
+                onDragEnd={() => setDragging(null)}
+                onDragOver={(x) => x.preventDefault()}
+                onDrop={(x) => {
+                  x.preventDefault();
+                  if (dragging && dragging !== e.id)
+                    move(dragging, selected, index);
+                }}
+                className={conflicts.has(e.id) ? "has-conflict" : ""}
+              >
+                <time>
+                  {e.time || "—"}
+                  <small>{e.duration ? `${e.duration} min` : ""}</small>
+                </time>
+                <TypeIcon type={e.type} />
+                <Card>
+                  <div className="event-top">
+                    <div>
+                      <span className="tag">
+                        {TYPES[e.type]?.label || "Outro"}
+                      </span>
+                      <span className={`status ${e.status || "pesquisar"}`}>
+                        {statusLabel(e.status)}
+                      </span>
+                      {conflicts.has(e.id) && (
+                        <span className="conflict-tag">Conflito</span>
+                      )}
+                    </div>
+                    <div>
+                      <button
+                        className="icon-btn"
+                        onClick={() => edit(e._index)}
+                      >
+                        <Pencil />
+                      </button>
+                      <button
+                        className="icon-btn danger-icon"
+                        onClick={() => remove(e._index)}
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
+                  </div>
+                  <h3>{e.title}</h3>
+                  {e.location && (
+                    <p>
+                      <MapPin /> {e.location}{" "}
+                      <a
+                        className="map-link"
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.location)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Ver mapa
+                      </a>
+                    </p>
+                  )}
+                  {e.notes && <p className="notes">{e.notes}</p>}
+                  <footer>
+                    {Number(e.cost) > 0 && <b>{money(e.cost)}</b>}
+                    {e.booking && (
+                      <span>
+                        <CheckCircle2 /> {e.booking}
+                      </span>
+                    )}
+                    {e.link && (
+                      <a href={e.link} target="_blank" rel="noreferrer">
+                        <ExternalLink /> Abrir reserva
+                      </a>
+                    )}
+                    <label className="move-day">
+                      Mover para{" "}
+                      <select
+                        value={e.date}
+                        onChange={(x) => {
+                          move(
+                            e.id,
+                            x.target.value,
+                            all.filter((y) => y.date === x.target.value).length,
+                          );
+                          setSelected(x.target.value);
+                        }}
+                      >
+                        {days.map((d, i) => (
+                          <option value={d} key={d}>
+                            Dia {i + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </footer>
+                </Card>
+              </article>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+      {copyOpen && (
+        <Modal title="Duplicar este dia" close={() => setCopyOpen(false)}>
+          <div className="fields">
+            <p>
+              Os {events.length} itens serão copiados sem códigos de reserva. Os
+              originais permanecem neste dia.
+            </p>
+            <label>
+              Copiar para
+              <select
+                value={copyTarget}
+                onChange={(e) => setCopyTarget(e.target.value)}
+              >
+                {days
+                  .filter((d) => d !== selected)
+                  .map((d, i) => (
+                    <option value={d} key={d}>
+                      {pretty(d)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <button className="primary" onClick={duplicateDay}>
+              Duplicar planejamento
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+function Ideas({ trip, update, open, schedule }) {
+  const ideas = trip.ideas || [],
+    remove = (id) => update({ ideas: ideas.filter((x) => x.id !== id) });
+  return (
+    <div className="page">
+      <Header
+        title="Caixa de ideias"
+        subtitle="Guarde possibilidades antes de decidir o dia"
+        action={
+          <button className="primary small" onClick={open}>
+            <Plus /> Nova ideia
+          </button>
+        }
+      />
+      {!ideas.length ? (
+        <Blank
+          icon={Lightbulb}
+          title="Salve o que chamou sua atenção"
+          text="Passeios, restaurantes, bairros e qualquer possibilidade podem ficar aqui até você decidir."
+          action={open}
+        />
+      ) : (
+        <div className="idea-grid">
+          {ideas.map((idea) => (
+            <Card key={idea.id} className="idea-card">
+              <div className="event-top">
+                <TypeIcon type={idea.type} />
+                <button
+                  className="icon-btn danger-icon"
+                  onClick={() => remove(idea.id)}
+                >
+                  <Trash2 />
+                </button>
+              </div>
+              <span className="tag">{TYPES[idea.type]?.label}</span>
+              <h3>{idea.title}</h3>
+              {idea.location && (
+                <p>
+                  <MapPin /> {idea.location}
+                </p>
+              )}
+              {idea.notes && <p className="notes">{idea.notes}</p>}
+              <footer>
+                {Number(idea.cost) > 0 && <b>{money(idea.cost)}</b>}
+                {idea.link && (
+                  <a href={idea.link} target="_blank" rel="noreferrer">
+                    <ExternalLink /> Fonte
+                  </a>
+                )}
+              </footer>
+              <button
+                className="outline schedule"
+                onClick={() => schedule(idea)}
+              >
+                <CalendarDays /> Colocar no roteiro
+              </button>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function Costs({ trip, edit }) {
+  const events = trip.itinerary || [],
+    total = events.reduce((s, e) => s + Number(e.cost || 0), 0);
+  const groups = Object.entries(TYPES)
+    .map(([id, t]) => ({
+      id,
+      ...t,
+      total: events
+        .filter((e) => e.type === id)
+        .reduce((s, e) => s + Number(e.cost || 0), 0),
+    }))
+    .filter((x) => x.total);
+  return (
+    <div className="page">
+      <Header
+        title="Custos previstos"
+        subtitle="Uma estimativa do que será necessário para a viagem"
+      />
+      <div className="cost-hero">
+        <div>
+          <small>TOTAL PLANEJADO</small>
+          <h2>{money(total)}</h2>
+          <p>
+            {trip.travelers || 1} viajante(s) ·{" "}
+            {money(total / (trip.travelers || 1))} por pessoa
+          </p>
+        </div>
+        {trip.budget > 0 && (
+          <div>
+            <small>TETO DEFINIDO</small>
+            <h3>{money(trip.budget)}</h3>
+            <div className="progress">
+              <i
+                style={{
+                  width: `${Math.min(100, (total / trip.budget) * 100)}%`,
+                }}
+              />
+            </div>
+            <p>
+              {total > trip.budget
+                ? `${money(total - trip.budget)} acima do teto`
+                : `${money(trip.budget - total)} disponíveis`}
+            </p>
+          </div>
+        )}
+      </div>
+      <div className="cost-grid">
+        {groups.length ? (
+          groups.map((g) => (
+            <Card key={g.id}>
+              <TypeIcon type={g.id} />
+              <div>
+                <span>{g.label}</span>
+                <strong>{money(g.total)}</strong>
+                <small>
+                  {Math.round((g.total / total) * 100)}% do previsto
+                </small>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <Blank
+            icon={Wallet}
+            title="Nenhum custo previsto"
+            text="Ao adicionar itens ao roteiro, informe os valores estimados."
+          />
+        )}
+      </div>
+      <h3 className="section-title">Itens com custo</h3>
+      <Card className="cost-list">
+        {events
+          .filter((e) => Number(e.cost) > 0)
+          .sort((a, b) => Number(b.cost) - Number(a.cost))
+          .map((e, i) => (
+            <button key={i} onClick={() => edit(trip.itinerary.indexOf(e))}>
+              <TypeIcon type={e.type} />
+              <div>
+                <b>{e.title}</b>
+                <small>
+                  {pretty(e.date)} · {TYPES[e.type]?.label}
+                </small>
+              </div>
+              <strong>{money(e.cost)}</strong>
+              <ChevronRight />
+            </button>
+          ))}
+      </Card>
+    </div>
+  );
+}
+function Checklist({ trip, update, open }) {
+  const list = trip.checklist || [],
+    toggle = (i) =>
+      update({
+        checklist: list.map((x, n) => (n === i ? { ...x, done: !x.done } : x)),
+      }),
+    remove = (i) => update({ checklist: list.filter((_, n) => n !== i) });
+  return (
+    <div className="page">
+      <Header
+        title="Antes de viajar"
+        subtitle={`${list.filter((x) => x.done).length}/${list.length} tarefas concluídas`}
+        action={
+          <button className="primary small" onClick={open}>
+            <Plus /> Nova tarefa
+          </button>
+        }
+      />
+      {!list.length ? (
+        <Blank
+          icon={ListChecks}
+          title="Prepare sua viagem"
+          text="Adicione documentos, reservas, mala e tudo que precisa resolver antes de sair."
+          action={open}
+        />
+      ) : (
+        <Card className="list">
+          {list.map((x, i) => (
+            <div className="task" key={i}>
+              <button onClick={() => toggle(i)}>
+                {x.done ? <CheckCircle2 className="ok" /> : <Circle />}
+                <span>
+                  <b className={x.done ? "done" : ""}>{x.name}</b>
+                  <small>{x.category}</small>
+                </span>
+              </button>
+              <button
+                className="icon-btn danger-icon"
+                onClick={() => remove(i)}
+              >
+                <X />
+              </button>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+function SettingsPage({
+  trip,
+  archived,
+  restore,
+  edit,
+  duplicate,
+  archive,
+  remove,
+}) {
+  return (
+    <div className="page">
+      <Header title="Configurações da viagem" subtitle={trip.name} />
+      <Card className="settings">
+        <button onClick={edit}>
+          <span>
+            <b>Dados da viagem</b>
+            <small>Destino, datas, viajantes e teto previsto</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button onClick={duplicate}>
+          <span>
+            <b>Duplicar viagem</b>
+            <small>Cria uma cópia independente deste planejamento</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button onClick={archive}>
+          <span>
+            <b>Arquivar viagem</b>
+            <small>Retira da lista ativa sem apagar os dados</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <div>
+          <b>Armazenamento</b>
+          <span>Neste dispositivo</span>
+        </div>
+      </Card>
+      {archived.length > 0 && (
+        <>
+          <h3 className="section-title">Viagens arquivadas</h3>
+          <Card className="archived-list">
+            {archived.map((t) => (
+              <button key={t.id} onClick={() => restore(t.id)}>
+                <span>
+                  <b>{t.name}</b>
+                  <small>{t.destination}</small>
+                </span>
+                <strong>Restaurar</strong>
+              </button>
+            ))}
+          </Card>
+        </>
+      )}
+      <button className="danger" onClick={remove}>
+        <Trash2 /> Excluir definitivamente
+      </button>
+    </div>
+  );
+}
+function Blank({ icon: I, title, text, action }) {
+  return (
+    <div className="blank">
+      <span>
+        <I />
+      </span>
+      <h2>{title}</h2>
+      <p>{text}</p>
+      {action && (
+        <button className="outline" onClick={action}>
+          <Plus /> Adicionar item
+        </button>
+      )}
+    </div>
+  );
+}
+function TripModal({ initial, onClose, onSave }) {
+  const [f, setF] = useState({
+    name: initial?.name || "",
+    destination: initial?.destination || "",
+    start: initial?.start || "",
+    end: initial?.end || "",
+    travelers: initial?.travelers || 1,
+    budget: initial?.budget || "",
+  });
+  const valid = f.name && f.destination && f.start && f.end && f.end >= f.start;
+  return (
+    <Modal title={initial ? "Editar viagem" : "Nova viagem"} close={onClose}>
+      <div className="fields">
+        <label>
+          Nome do plano
+          <input
+            value={f.name}
+            onChange={(e) => setF({ ...f, name: e.target.value })}
+            placeholder="Férias de julho"
+          />
+        </label>
+        <label>
+          Para onde você vai?
+          <input
+            value={f.destination}
+            onChange={(e) => setF({ ...f, destination: e.target.value })}
+            placeholder="Buenos Aires, Argentina"
+          />
+        </label>
+        <div>
+          <label>
+            Data de ida
+            <input
+              type="date"
+              value={f.start}
+              onChange={(e) => setF({ ...f, start: e.target.value })}
+            />
+          </label>
+          <label>
+            Data de volta
+            <input
+              type="date"
+              min={f.start}
+              value={f.end}
+              onChange={(e) => setF({ ...f, end: e.target.value })}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Viajantes
+            <input
+              type="number"
+              min="1"
+              value={f.travelers}
+              onChange={(e) =>
+                setF({ ...f, travelers: Number(e.target.value) })
+              }
+            />
+          </label>
+          <label>
+            Teto previsto (opcional)
+            <input
+              type="number"
+              min="0"
+              value={f.budget}
+              onChange={(e) => setF({ ...f, budget: Number(e.target.value) })}
+              placeholder="R$ 0"
+            />
+          </label>
+        </div>
+        <button className="primary" disabled={!valid} onClick={() => onSave(f)}>
+          {initial ? "Salvar alterações" : "Criar meu planejamento"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+let lastGeocodeRequest = 0;
+function PlaceSearch({ value, destination, selected, onChange, onSelect }) {
+  const [results, setResults] = useState([]),
+    [loading, setLoading] = useState(false),
+    [error, setError] = useState("");
+  const search = async () => {
+    const query = value.trim();
+    if (query.length < 3) {
+      setError("Digite ao menos 3 caracteres.");
+      return;
+    }
+    const cacheKey = `${query}|${destination}`.toLowerCase(),
+      cache = JSON.parse(
+        localStorage.getItem("tripnext-geocode-cache") || "{}",
+      );
+    if (cache[cacheKey]) {
+      setResults(cache[cacheKey]);
+      setError("");
+      return;
+    }
+    if (Date.now() - lastGeocodeRequest < 1100) {
+      setError("Aguarde um instante antes de buscar novamente.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    lastGeocodeRequest = Date.now();
+    try {
+      const params = new URLSearchParams({
+        q: `${query}, ${destination}`,
+        format: "jsonv2",
+        limit: "5",
+        addressdetails: "1",
+        "accept-language": "pt-BR",
+      });
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params}`,
+      );
+      if (!response.ok)
+        throw new Error(`Busca indisponível (${response.status})`);
+      const places = (await response.json()).map((item) => ({
+        placeId: `osm:${item.osm_type}:${item.osm_id}`,
+        displayName: item.display_name,
+        latitude: Number(item.lat),
+        longitude: Number(item.lon),
+        category: item.type || item.category,
+      }));
+      cache[cacheKey] = places;
+      localStorage.setItem("tripnext-geocode-cache", JSON.stringify(cache));
+      setResults(places);
+      if (!places.length)
+        setError(
+          "Nenhum lugar encontrado. Você ainda pode salvar o endereço digitado.",
+        );
+    } catch (cause) {
+      setError(cause.message || "Não foi possível buscar agora.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="place-search">
+      <label>
+        Local / endereço
+        <div className="place-input">
+          <input
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setResults([]);
+            }}
+            placeholder="Aeroporto, hotel ou ponto de encontro"
+          />
+          <button type="button" onClick={search} disabled={loading}>
+            {loading ? "Buscando…" : "Buscar lugar"}
+          </button>
+        </div>
+      </label>
+      {selected && (
+        <small className="place-confirmed">
+          <CheckCircle2 /> Local confirmado no mapa
+        </small>
+      )}
+      {error && <small className="place-error">{error}</small>}
+      {results.length > 0 && (
+        <div className="place-results">
+          {results.map((place) => (
+            <button
+              type="button"
+              key={place.placeId}
+              onClick={() => {
+                onSelect(place);
+                setResults([]);
+              }}
+            >
+              <MapPin />
+              <span>
+                <b>{place.displayName.split(",")[0]}</b>
+                <small>{place.displayName}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <small className="osm-credit">
+        Busca por{" "}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+        >
+          OpenStreetMap/Nominatim
+        </a>
+      </small>
+    </div>
+  );
+}
+function EventModal({ trip, initial, onClose, onSave }) {
+  const [f, setF] = useState(
+    initial || {
+      type: "transporte",
+      status: "pesquisar",
+      title: "",
+      location: "",
+      latitude: null,
+      longitude: null,
+      placeId: "",
+      date: trip.start,
+      time: "09:00",
+      duration: "",
+      cost: "",
+      booking: "",
+      link: "",
+      notes: "",
+    },
+  );
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  return (
+    <Modal
+      title={initial ? "Editar item" : "Adicionar ao roteiro"}
+      close={onClose}
+    >
+      <div className="fields">
+        <div>
+          <label>
+            Tipo
+            <select
+              value={f.type}
+              onChange={(e) => set("type", e.target.value)}
+            >
+              {Object.entries(TYPES).map(([id, t]) => (
+                <option value={id} key={id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Situação
+            <select
+              value={f.status || "pesquisar"}
+              onChange={(e) => set("status", e.target.value)}
+            >
+              <option value="pesquisar">Ainda pesquisando</option>
+              <option value="reservar">Precisa reservar</option>
+              <option value="reservado">Reservado</option>
+              <option value="gratuito">Não precisa reservar</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          O que está planejando?
+          <input
+            value={f.title}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder="Voo para Buenos Aires, Museu, jantar..."
+          />
+        </label>
+        <PlaceSearch
+          value={f.location || ""}
+          destination={trip.destination}
+          selected={Number.isFinite(f.latitude) && Number.isFinite(f.longitude)}
+          onChange={(location) =>
+            setF((x) => ({
+              ...x,
+              location,
+              latitude: null,
+              longitude: null,
+              placeId: "",
+            }))
+          }
+          onSelect={(place) =>
+            setF((x) => ({
+              ...x,
+              location: place.displayName,
+              latitude: place.latitude,
+              longitude: place.longitude,
+              placeId: place.placeId,
+            }))
+          }
+        />
+        <div>
+          <label>
+            Data
+            <input
+              type="date"
+              min={trip.start}
+              max={trip.end}
+              value={f.date}
+              onChange={(e) => set("date", e.target.value)}
+            />
+          </label>
+          <label>
+            Horário
+            <input
+              type="time"
+              value={f.time || ""}
+              onChange={(e) => set("time", e.target.value)}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            Duração (minutos)
+            <input
+              type="number"
+              min="0"
+              value={f.duration || ""}
+              onChange={(e) => set("duration", e.target.value)}
+            />
+          </label>
+          <label>
+            Custo previsto total
+            <input
+              type="number"
+              min="0"
+              value={f.cost || ""}
+              onChange={(e) => set("cost", e.target.value)}
+              placeholder="0"
+            />
+          </label>
+        </div>
+        <label>
+          Reserva / confirmação
+          <input
+            value={f.booking || ""}
+            onChange={(e) => set("booking", e.target.value)}
+            placeholder="Código da reserva ou informação útil"
+          />
+        </label>
+        <label>
+          Link útil
+          <input
+            type="url"
+            value={f.link || ""}
+            onChange={(e) => set("link", e.target.value)}
+            placeholder="https://..."
+          />
+        </label>
+        <label>
+          Observações
+          <textarea
+            value={f.notes || ""}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder="O que você precisa lembrar?"
+          />
+        </label>
+        <button
+          className="primary"
+          disabled={!f.title || !f.date}
+          onClick={() =>
+            onSave({
+              ...f,
+              cost: Number(f.cost) || 0,
+              duration: Number(f.duration) || 0,
+            })
+          }
+        >
+          {initial ? "Salvar item" : "Adicionar ao plano"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function TaskModal({ onClose, onSave }) {
+  const [name, setName] = useState(""),
+    [category, setCategory] = useState("Documentos");
+  return (
+    <Modal title="Nova tarefa" close={onClose}>
+      <div className="fields">
+        <label>
+          O que precisa resolver?
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Comprar seguro viagem"
+          />
+        </label>
+        <label>
+          Categoria
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option>Documentos</option>
+            <option>Reservas</option>
+            <option>Mala</option>
+            <option>Saúde</option>
+            <option>Transporte</option>
+            <option>Outros</option>
+          </select>
+        </label>
+        <button
+          className="primary"
+          disabled={!name}
+          onClick={() => onSave({ name, category, done: false })}
+        >
+          Adicionar tarefa
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function IdeaModal({ onClose, onSave }) {
+  const [f, setF] = useState({
+      type: "passeio",
+      title: "",
+      location: "",
+      cost: "",
+      link: "",
+      notes: "",
+    }),
+    set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  return (
+    <Modal title="Guardar uma ideia" close={onClose}>
+      <div className="fields">
+        <label>
+          Tipo
+          <select value={f.type} onChange={(e) => set("type", e.target.value)}>
+            {Object.entries(TYPES).map(([id, t]) => (
+              <option value={id} key={id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Nome da ideia
+          <input
+            autoFocus
+            value={f.title}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder="Museu, restaurante, bate-volta..."
+          />
+        </label>
+        <label>
+          Local
+          <input
+            value={f.location}
+            onChange={(e) => set("location", e.target.value)}
+            placeholder="Bairro, cidade ou endereço"
+          />
+        </label>
+        <label>
+          Preço estimado
+          <input
+            type="number"
+            min="0"
+            value={f.cost}
+            onChange={(e) => set("cost", e.target.value)}
+          />
+        </label>
+        <label>
+          Link da pesquisa
+          <input
+            type="url"
+            value={f.link}
+            onChange={(e) => set("link", e.target.value)}
+            placeholder="https://..."
+          />
+        </label>
+        <label>
+          Por que salvar?
+          <textarea
+            value={f.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder="Detalhes, prós, restrições..."
+          />
+        </label>
+        <button
+          className="primary"
+          disabled={!f.title}
+          onClick={() => onSave({ ...f, cost: Number(f.cost) || 0 })}
+        >
+          Guardar ideia
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function Modal({ title, close, children }) {
+  return (
+    <div
+      className="overlay"
+      onMouseDown={(e) => e.target === e.currentTarget && close()}
+    >
+      <div className="modal">
+        <div className="modal-head">
+          <h2>{title}</h2>
+          <button onClick={close}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function sortEvents(a, b) {
+  return `${a.date}${String(a.sortOrder ?? 0).padStart(4, "0")}${a.time || ""}`.localeCompare(
+    `${b.date}${String(b.sortOrder ?? 0).padStart(4, "0")}${b.time || ""}`,
+  );
+}
+function statusLabel(status) {
+  return {
+    pesquisar: "Pesquisando",
+    reservar: "Reservar",
+    reservado: "Reservado",
+    gratuito: "Sem reserva",
+  }[status || "pesquisar"];
+}
+function newId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ||
+    `trip-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+}
+function loadStore() {
+  return migrateStoredData(
+    localStorage.getItem("tripnext-store"),
+    localStorage.getItem("tripnext-trip"),
+    newId,
+  );
+}
+function exportCalendar(trip) {
+  const esc = (v) =>
+      String(v || "")
+        .replaceAll("\\", "\\\\")
+        .replaceAll("\n", "\\n")
+        .replaceAll(",", "\\,")
+        .replaceAll(";", "\\;"),
+    stamp = (d) =>
+      d
+        .toISOString()
+        .replaceAll("-", "")
+        .replaceAll(":", "")
+        .replace(/\.\d{3}Z$/, "Z"),
+    local = (d) =>
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
+  const body = (trip.itinerary || [])
+    .sort(sortEvents)
+    .map((e, i) => {
+      const start = new Date(`${e.date}T${e.time || "09:00"}:00`),
+        end = new Date(start.getTime() + (Number(e.duration) || 60) * 60000);
+      return [
+        "BEGIN:VEVENT",
+        `UID:tripnext-${e.date}-${i}@tripnext`,
+        `DTSTAMP:${stamp(new Date())}`,
+        `DTSTART:${local(start)}`,
+        `DTEND:${local(end)}`,
+        `SUMMARY:${esc(e.title)}`,
+        `LOCATION:${esc(e.location)}`,
+        `DESCRIPTION:${esc([e.notes, e.booking, e.link].filter(Boolean).join(" | "))}`,
+        "END:VEVENT",
+      ].join("\r\n");
+    })
+    .join("\r\n");
+  const file = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TripNext//Planejador//PT",
+      "CALSCALE:GREGORIAN",
+      body,
+      "END:VCALENDAR",
+    ].join("\r\n"),
+    url = URL.createObjectURL(
+      new Blob([file], { type: "text/calendar;charset=utf-8" }),
+    ),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = `${trip.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-roteiro.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+createRoot(document.getElementById("root")).render(<App />);

@@ -113,13 +113,12 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 
 ### Lugares e mapa
 
-- [ ] Mapa lado a lado com o roteiro no desktop.
-- [ ] Mapa alternável com o roteiro no celular.
-- [ ] Marcadores por dia, categoria e ordem.
-- [ ] Busca de lugares com autocomplete.
-- [ ] Salvar coordenadas, place ID, endereço e fuso horário.
-- [ ] Exibir distância e duração entre paradas.
-- [ ] Modos a pé, carro, bicicleta e transporte público.
+- [x] Mapa integrado ao roteiro diário no desktop e celular.
+- [x] Marcadores por dia, categoria e ordem.
+- [x] Busca explícita de lugares com Nominatim e cache local; autocomplete público foi evitado conforme a política do provedor.
+- [x] Salvar coordenadas, place ID e endereço no web e Room.
+- [x] Exibir distância geodésica e duração inicial estimada entre paradas, claramente identificadas como aproximação.
+- [x] Modos a pé, carro, bicicleta e transporte público para estimativa inicial.
 - [ ] Abrir o trecho no Google Maps, Apple Maps ou Waze.
 - [ ] Alertar quando o roteiro exigir deslocamento inviável.
 

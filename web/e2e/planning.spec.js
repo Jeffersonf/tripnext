@@ -3,6 +3,7 @@ import {test,expect} from '@playwright/test';
 test.beforeEach(async({page})=>{await page.addInitScript(()=>localStorage.clear());await page.goto('./');});
 
 test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
+  await page.route('https://nominatim.openstreetmap.org/search?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify([{osm_type:'node',osm_id:123,display_name:'MALBA, Palermo, Buenos Aires, Argentina',lat:'-34.5764',lon:'-58.4033',type:'museum'}])}));
   await page.getByRole('button',{name:'Começar a planejar'}).click();
   await page.getByLabel('Nome do plano').fill('Buenos Aires em família');
   await page.getByLabel('Para onde você vai?').fill('Buenos Aires, Argentina');
@@ -17,10 +18,13 @@ test('cria viagem, guarda ideia e transforma em roteiro',async({page})=>{
   await page.getByLabel('Preço estimado').fill('75');
   await page.getByRole('button',{name:'Guardar ideia'}).click();
   await page.getByRole('button',{name:'Colocar no roteiro'}).click();
+  await page.getByRole('button',{name:'Buscar lugar'}).click();
+  await page.getByRole('button',{name:/MALBA/}).click();
   await page.getByRole('button',{name:'Salvar item'}).click();
   await page.getByRole('button',{name:'Roteiro'}).click();
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();
   await expect(page.getByText(/75,00/)).toBeVisible();
+  await expect(page.locator('.leaflet-container')).toBeVisible();
   await page.getByRole('button',{name:'Duplicar dia'}).click();
   await page.getByRole('button',{name:'Duplicar planejamento'}).click();
   await expect(page.getByRole('heading',{name:'Museu de Arte Latino-Americana'})).toBeVisible();
