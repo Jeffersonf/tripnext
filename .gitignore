@@ -9,6 +9,8 @@ captures/
 .cxx/
 node_modules/
 web/dist/
+web/test-results/
+web/playwright-report/
 web/.git.accidental/
 *.png
 *.xml

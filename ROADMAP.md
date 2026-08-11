@@ -101,7 +101,7 @@ Objetivo: substituir planilhas e notas para uma viagem individual.
 
 - [x] Arrastar e soltar itens dentro do dia.
 - [x] Mover um item para outro dia.
-- [ ] Duplicar item e duplicar um dia inteiro.
+- [x] Duplicar um dia inteiro sem copiar códigos de reserva.
 - [x] Itens sem data em uma caixa de ideias.
 - [x] Blocos manhã, tarde e noite, além de horário exato.
 - [ ] Duração estimada e intervalo entre atividades.
@@ -451,7 +451,7 @@ Ordem exata de implementação:
 5. [x] Implementar drag-and-drop e persistir `sortOrder`.
 6. [x] Adicionar blocos manhã/tarde/noite e detecção de choque.
 7. [x] Adicionar opção de “tempo livre intencional”.
-8. Criar testes E2E desta jornada.
+8. [x] Criar testes E2E desta jornada.
 9. Migrar a mesma estrutura para Room no Android.
 
 ### Definição de pronto do M1
