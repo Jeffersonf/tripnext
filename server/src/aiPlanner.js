@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const allowedTypes = new Set(["FLIGHT", "CHECK_IN", "CHECK_OUT", "ACTIVITY", "RESTAURANT", "TRANSFER", "OTHER"]);
 const allowedChecklist = new Set(["DOCUMENTS", "CLOTHES", "ELECTRONICS", "HYGIENE", "MEDICINES", "OTHER"]);
 const allowedBudgets = new Set(["ACCOMMODATION", "TRANSPORT", "FOOD", "ACTIVITIES", "INSURANCE", "GIFTS", "DOCUMENTS", "UNEXPECTED"]);
@@ -31,6 +33,17 @@ export function normalizeProposal(value) {
   const budgets = Array.isArray(value?.budgets) ? value.budgets.slice(0, 8).map(item => ({ category: allowedBudgets.has(item.category) ? item.category : "UNEXPECTED", percent: Math.max(0, Math.min(100, Math.trunc(Number(item.percent) || 0))), reason: cleanText(item.reason, 240) })) : [];
   const sources = Array.isArray(value?.sources) ? value.sources.slice(0, 12).map(item => ({ title: cleanText(item.title, 160), url: cleanUrl(item.url), checkedAt: cleanText(item.checkedAt, 40) })).filter(item => item.url) : [];
   return { overview: cleanText(value?.overview, 1600), itinerary, checklist, budgets, sources, generatedAt: new Date().toISOString() };
+}
+
+export function buildProposalDiff(proposal, context) {
+  const existingEvents = Array.isArray(context?.itinerary) ? context.itinerary : [], existingChecklist = Array.isArray(context?.checklist) ? context.checklist : [];
+  const same = (left, right) => cleanText(left).toLocaleLowerCase("pt-BR") === cleanText(right).toLocaleLowerCase("pt-BR");
+  return {
+    ...proposal,
+    itinerary: proposal.itinerary.map(item => { const duplicate = existingEvents.find(event => same(event.title, item.title) && (!item.location || same(event.location, item.location))); return { ...item, id: randomUUID(), action: duplicate ? "SKIP_DUPLICATE" : "ADD", targetId: duplicate?.id || null }; }),
+    checklist: proposal.checklist.map(item => { const duplicate = existingChecklist.find(existing => same(existing.name, item.name)); return { ...item, id: randomUUID(), action: duplicate ? "SKIP_DUPLICATE" : "ADD", targetId: duplicate?.id || null }; }),
+    budgets: proposal.budgets.map(item => ({ ...item, id: randomUUID(), action: "UPDATE", targetId: item.category })),
+  };
 }
 
 export function createGeminiPlanner({ apiKey, model = "gemini-3.5-flash", fetchImpl = fetch, timeoutMs = 60000 } = {}) {

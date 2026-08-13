@@ -23,6 +23,7 @@ interface TripRemoteRepository {
     suspend fun push(operations: List<PendingOperationEntity>): List<PushResult>
     suspend fun pull(cursor: Long): PullResult
     suspend fun plan(tripId: String, context: JSONObject): JSONObject
+    suspend fun applyProposal(proposalId: String, selectedItemIds: Set<String>): JSONObject
 }
 
 class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteRepository {
@@ -60,7 +61,11 @@ class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteR
     }
     override suspend fun plan(tripId: String, context: JSONObject): JSONObject {
         val session = requireSession()
-        return request(session.apiUrl + "/api/ai/plan", "POST", JSONObject().put("tripId", tripId).put("context", context), session.token).getJSONObject("proposal")
+        return request(session.apiUrl + "/api/ai/plan", "POST", JSONObject().put("tripId", tripId).put("context", context), session.token).getJSONObject("record")
+    }
+    override suspend fun applyProposal(proposalId: String, selectedItemIds: Set<String>): JSONObject {
+        val session = requireSession()
+        return request(session.apiUrl + "/api/ai/proposals/$proposalId/apply", "POST", JSONObject().put("selectedItemIds", JSONArray(selectedItemIds.toList())), session.token).getJSONObject("record")
     }
     private fun requireSession() = sessions.load() ?: error("Entre na sua conta para sincronizar.")
     private fun request(url: String, method: String, body: JSONObject?, token: String?) = requestRaw(url, method, body, token).let { if (it.first !in 200..299) errorFrom(it); JSONObject(it.second) }

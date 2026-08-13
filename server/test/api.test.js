@@ -62,7 +62,7 @@ test("pull returns ordered changes and preserves tombstones", async () => {
 
 test("AI planning requires authentication, trip access and returns a proposal", async () => {
   const aiCalls = [];
-  const aiServer = createApp({ store, authSecret: secret, aiPlanner: async context => { aiCalls.push(context); return { overview: "Plano revisável", itinerary: [], checklist: [], budgets: [], sources: [], generatedAt: "2026-08-13T00:00:00.000Z" }; } }).listen(0);
+  const aiServer = createApp({ store, authSecret: secret, aiPlanner: async context => { aiCalls.push(context); return { overview: "Plano revisável", itinerary: [{ dayOffset: 0, time: "09:00", title: "Museu", location: "Centro", type: "ACTIVITY", estimatedCostMinor: 2000, sourceUrl: "", reason: "Perto" }], checklist: [], budgets: [], sources: [], generatedAt: "2026-08-13T00:00:00.000Z" }; } }).listen(0);
   await new Promise(resolve => aiServer.once("listening", resolve));
   const aiUrl = `http://127.0.0.1:${aiServer.address().port}`;
   const user = await register("planner@example.com"), { id: tripId } = await createTrip(user.body.token);
@@ -70,6 +70,15 @@ test("AI planning requires authentication, trip access and returns a proposal", 
   assert.equal((await call(null, { tripId, context: { id: tripId } })).status, 401);
   assert.equal((await call(user.body.token, { tripId: "missing", context: { id: "missing" } })).status, 404);
   const result = await call(user.body.token, { tripId, context: { id: tripId, name: "Rio" } });
-  assert.equal(result.status, 200); assert.equal(result.body.proposal.overview, "Plano revisável"); assert.equal(aiCalls.length, 1);
+  assert.equal(result.status, 201); assert.equal(result.body.record.proposal.overview, "Plano revisável"); assert.equal(aiCalls.length, 1);
+  const proposalId = result.body.record.id, itemId = result.body.record.proposal.itinerary[0].id;
+  const listed = await fetch(`${aiUrl}/api/trips/${tripId}/ai/proposals`, { headers: { authorization: `Bearer ${user.body.token}` } }).then(response => response.json());
+  assert.equal(listed.proposals[0].id, proposalId);
+  const invalidSelection = await fetch(`${aiUrl}/api/ai/proposals/${proposalId}/apply`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${user.body.token}` }, body: JSON.stringify({ selectedItemIds: [randomUUID()] }) });
+  assert.equal(invalidSelection.status, 409);
+  const appliedResponse = await fetch(`${aiUrl}/api/ai/proposals/${proposalId}/apply`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${user.body.token}` }, body: JSON.stringify({ selectedItemIds: [itemId] }) });
+  const applied = await appliedResponse.json(); assert.equal(appliedResponse.status, 200); assert.deepEqual(applied.record.selectedItemIds, [itemId]); assert.equal(applied.record.status, "APPLIED");
+  const repeated = await fetch(`${aiUrl}/api/ai/proposals/${proposalId}/apply`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${user.body.token}` }, body: JSON.stringify({ selectedItemIds: [itemId] }) }).then(response => response.json());
+  assert.equal(repeated.duplicate, true);
   await new Promise(resolve => aiServer.close(resolve));
 });

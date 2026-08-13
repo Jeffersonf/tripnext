@@ -8,6 +8,7 @@ export class MemoryStore {
     this.entities = new Map();
     this.mutations = new Map();
     this.changes = [];
+    this.aiProposals = new Map();
     this.sequence = 0;
   }
 
@@ -64,6 +65,10 @@ export class MemoryStore {
     const changes = this.changes.filter((change) => change.sequence > cursor && allowed.has(change.tripId) && (!tripId || change.tripId === tripId));
     return { cursor: changes.at(-1)?.sequence || Number(cursor), changes };
   }
+  async createAiProposal(userId, tripId, proposal) { const now = new Date(), value = { id: randomUUID(), tripId, createdBy: userId, status: "DRAFT", proposal, selectedItemIds: null, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 7 * 86400000).toISOString(), appliedAt: null }; this.aiProposals.set(value.id, value); return value; }
+  async listAiProposals(userId, tripId) { if (!await this.tripRole(userId, tripId)) return []; return [...this.aiProposals.values()].filter(value => value.tripId === tripId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  async aiProposal(userId, proposalId) { const value = this.aiProposals.get(proposalId); return value && await this.tripRole(userId, value.tripId) ? value : null; }
+  async applyAiProposal(userId, proposalId, selectedItemIds) { const value = this.aiProposals.get(proposalId), role = value && await this.tripRole(userId, value.tripId); if (!value || !["ORGANIZER", "EDITOR"].includes(role)) return null; if (value.status !== "DRAFT" || new Date(value.expiresAt) <= new Date()) throw Object.assign(new Error("proposal_not_applicable"), { code: "proposal_not_applicable" }); value.status = "APPLIED"; value.selectedItemIds = selectedItemIds; value.appliedAt = new Date().toISOString(); return value; }
   recordChange(userId, tripId, entityType, entityId, version, deleted, payload) {
     this.changes.push({ sequence: ++this.sequence, tripId, entityType, entityId, version, deleted, payload, changedBy: userId, changedAt: new Date().toISOString() });
   }

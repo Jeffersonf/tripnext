@@ -107,10 +107,38 @@ paths:
                 tripId: { type: string, maxLength: 200 }
                 context: { type: object, additionalProperties: true }
       responses:
-        "200": { description: Proposta estruturada com roteiro, checklist, orçamento e fontes }
+        "201": { description: Proposta estruturada e persistida com roteiro, checklist, orçamento, diff e fontes }
         "404": { description: Viagem não encontrada ou inacessível }
         "502": { description: Provedor de IA indisponível }
         "503": { description: IA não configurada no servidor }
+  /api/trips/{tripId}/ai/proposals:
+    get:
+      operationId: listAiPlanProposals
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: tripId, in: path, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        "200": { description: Últimas propostas da viagem com estado e validade }
+        "404": { description: Viagem não encontrada ou inacessível }
+  /api/ai/proposals/{proposalId}/apply:
+    post:
+      operationId: applyAiPlanProposal
+      description: Registra quais itens o usuário confirmou; o cliente os aplica pelo fluxo local-first.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [selectedItemIds]
+              properties:
+                selectedItemIds: { type: array, maxItems: 50, items: { type: string, format: uuid } }
+      responses:
+        "200": { description: Seleção persistida e proposta marcada como aplicada }
+        "409": { description: Proposta expirada, já aplicada ou seleção inválida }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

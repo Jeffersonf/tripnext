@@ -222,7 +222,7 @@ Objetivo: a IA deve propor mudanças e gravá-las somente após revisão do usu�
 - [ ] Explicar conflitos, sazonalidade e riscos.
 - [ ] Converter conversa em alterações estruturadas.
 - [ ] Mostrar diff antes de aplicar: adicionar, mover, remover e alterar custo.
-- [ ] Permitir aceitar por item ou aceitar tudo.
+- [x] Permitir aceitar por item ou aceitar tudo no Android.
 - [x] Registrar a origem da sugestão e quando foi gerada.
 
 ### Segurança e qualidade
@@ -455,6 +455,8 @@ Critérios de aceite:
 - [x] **M1:** múltiplas viagens, caixa de ideias, organização diária, drag-and-drop, conflitos e paridade do modelo local no Android.
 - [x] **M2:** lugares estruturados, mapa, trechos, rota viária sob demanda, cache e alertas de deslocamento inviável.
 - [x] **M3:** comparação, moedas, faixas, custos por viajante, contingência, prazos e histórico manual de preços.
+- [ ] **M4:** backend, sessão e sync web↔Android implementados; homologação HTTPS e validação física cruzada ainda pendentes.
+- [ ] **M5:** backend seguro, propostas persistidas, diff de adição/duplicata e seleção individual no Android entregues; perfil completo, diff de mover/remover e paridade web ainda pendentes.
 
 ## Próximo sprint recomendado — M4
 
@@ -509,13 +511,15 @@ Ordem exata de implementação:
 | 2026-08-13 | `server: npm test` | **PASS** — 10 testes ativos; endpoint de IA autenticado, autorização por viagem, normalização e segredo somente no header do servidor |
 | 2026-08-13 | `web: npm test && npm run build` | **PASS** — 17 testes e bundle de produção; nenhuma chamada ou chave Gemini no JavaScript |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — copiloto Android usa `/api/ai/plan`, mostra proposta antes de importar e remove credencial legada |
+| 2026-08-13 | `server: npm test` | **PASS** — proposta persistida, seleção validada/idempotente e diff de duplicatas; migration PostgreSQL 002 aguardando CI com banco real |
+| 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — seleção individual de roteiro, checklist e orçamento; IDs estáveis tornam a importação local idempotente |
 
 ## Próximo incremento executável
 
-1. Persistir propostas com validade e permitir aceitar ou rejeitar cada item, além de “aceitar tudo”.
-2. Evoluir o diff para detectar adições, alterações, movimentações, remoções e duplicatas antes de qualquer gravação.
-3. Adicionar perfil de planejamento: origem, datas flexíveis, viajantes, ritmo, interesses, restrições, mobilidade e orçamento previsto.
-4. Levar o copiloto revisável também ao site e sincronizar apenas os itens confirmados.
+1. Evoluir o diff para detectar alterações, movimentações e remoções, com comparação campo a campo antes da gravação.
+2. Adicionar perfil de planejamento: origem, datas flexíveis, viajantes, ritmo, interesses, restrições, mobilidade e orçamento previsto.
+3. Levar o copiloto revisável também ao site e sincronizar apenas os itens confirmados.
+4. Adicionar expiração visível, descarte de proposta e retomada das propostas pendentes no Android e web.
 5. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.
 6. Publicar a API e o PostgreSQL em homologação com HTTPS, cota por usuário, rate limiting e segredos gerenciados.
 

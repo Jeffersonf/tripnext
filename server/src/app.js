@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import { authMiddleware, hashPassword, signToken, verifyPassword } from "./auth.js";
+import { buildProposalDiff } from "./aiPlanner.js";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -83,8 +84,28 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
       const tripId = String(request.body?.tripId || ""), context = request.body?.context;
       if (!tripId || tripId.length > 200 || !context || typeof context !== "object" || context.id !== tripId || JSON.stringify(context).length > 100000) return badRequest(response, "tripId and matching context (up to 100 KB) are required");
       if (!await store.tripRole(request.auth.sub, tripId)) return response.status(404).json({ error: "trip_not_found" });
-      response.json({ proposal: await aiPlanner(context) });
+      const proposal = buildProposalDiff(await aiPlanner(context), context);
+      response.status(201).json({ record: await store.createAiProposal(request.auth.sub, tripId, proposal) });
     } catch (error) { if (error.code === "ai_provider_error" || error.name === "AbortError") return response.status(502).json({ error: "ai_provider_error" }); next(error); }
+  });
+  app.get("/api/trips/:tripId/ai/proposals", authenticate, async (request, response) => {
+    if (!await store.tripRole(request.auth.sub, request.params.tripId)) return response.status(404).json({ error: "trip_not_found" });
+    response.json({ proposals: await store.listAiProposals(request.auth.sub, request.params.tripId) });
+  });
+  app.post("/api/ai/proposals/:proposalId/apply", authenticate, async (request, response, next) => {
+    try {
+      const selectedItemIds = request.body?.selectedItemIds;
+      if (!Array.isArray(selectedItemIds) || selectedItemIds.length > 50 || selectedItemIds.some(id => !uuidPattern.test(String(id)))) return badRequest(response, "selectedItemIds must contain at most 50 UUIDs");
+      const existing = await store.aiProposal(request.auth.sub, request.params.proposalId);
+      if (!existing) return response.status(404).json({ error: "proposal_not_found" });
+      const available = new Set([...(existing.proposal.itinerary || []), ...(existing.proposal.checklist || []), ...(existing.proposal.budgets || [])].filter(item => item.action !== "SKIP_DUPLICATE").map(item => item.id));
+      const uniqueIds = [...new Set(selectedItemIds)];
+      if (uniqueIds.some(id => !available.has(id))) return response.status(409).json({ error: "invalid_proposal_selection" });
+      if (existing.status === "APPLIED") return JSON.stringify(existing.selectedItemIds || []) === JSON.stringify(uniqueIds) ? response.json({ record: existing, duplicate: true }) : response.status(409).json({ error: "proposal_not_applicable" });
+      const record = await store.applyAiProposal(request.auth.sub, request.params.proposalId, uniqueIds);
+      if (!record) return response.status(404).json({ error: "proposal_not_found" });
+      response.json({ record });
+    } catch (error) { if (error.code === "proposal_not_applicable") return response.status(409).json({ error: "proposal_not_applicable" }); next(error); }
   });
 
   app.use((_request, response) => response.status(404).json({ error: "not_found" }));
