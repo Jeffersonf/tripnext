@@ -139,6 +139,16 @@ paths:
       responses:
         "200": { description: Seleção persistida e proposta marcada como aplicada }
         "409": { description: Proposta expirada, já aplicada ou seleção inválida }
+  /api/ai/proposals/{proposalId}/dismiss:
+    post:
+      operationId: dismissAiPlanProposal
+      description: Descarta explicitamente uma proposta pendente sem alterar a viagem.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Proposta marcada como descartada }
+        "409": { description: Proposta já aplicada ou descartada }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

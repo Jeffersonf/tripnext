@@ -39,7 +39,8 @@ data class AiItinerarySuggestion(val id: String, val action: String, val targetI
 data class AiChecklistSuggestion(val id: String, val action: String, val targetId: String, val changes: List<AiFieldChange>, val name: String, val category: String, val reason: String)
 data class AiBudgetSuggestion(val id: String, val action: String, val changes: List<AiFieldChange>, val category: String, val percent: Int, val reason: String)
 data class AiSource(val title: String, val url: String, val checkedAt: String)
-data class AiTravelProposal(val id: String, val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String) { val selectableIds get() = (itinerary.map { it.id to it.action } + checklist.map { it.id to it.action } + budgets.map { it.id to it.action }).filter { it.second !in setOf("SKIP_DUPLICATE", "SKIP_UNCHANGED") }.map { it.first }.toSet() }
+data class AiTravelProposal(val id: String, val status: String, val createdAt: String, val expiresAt: String, val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String) { val selectableIds get() = (itinerary.map { it.id to it.action } + checklist.map { it.id to it.action } + budgets.map { it.id to it.action }).filter { it.second !in setOf("SKIP_DUPLICATE", "SKIP_UNCHANGED") }.map { it.first }.toSet() }
+data class AiProposalHistory(val id: String, val status: String, val createdAt: String, val expiresAt: String)
 data class TravelProfileInput(val origin: String, val flexibleDates: Boolean, val children: Int, val childAges: String, val interests: String, val avoid: String, val pace: String, val preferredStartHour: Int, val restMinutes: Int, val foodPreferences: String, val dietaryRestrictions: String, val preferredTransport: String, val maxWalkingMinutes: Int, val mobilityNeeds: String)
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,6 +55,7 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     var aiLoading by mutableStateOf(false); private set
     var aiError by mutableStateOf<String?>(null); private set
     var selectedAiItemIds by mutableStateOf<Set<String>>(emptySet()); private set
+    var aiProposalHistory by mutableStateOf<List<AiProposalHistory>>(emptyList()); private set
     private val selectedTripId = MutableStateFlow<String?>(null)
     private val selectedTrip = selectedTripId.flatMapLatest { id -> id?.let(repository::trip) ?: flowOf(null) }
     private val expenses = selectedTripId.flatMapLatest { id -> id?.let(repository::expenses) ?: flowOf(emptyList()) }
@@ -121,8 +123,23 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
         val trip = uiState.value.activeTrip ?: return@launch
         aiLoading = true; aiError = null
         runCatching { withContext(Dispatchers.IO) { parseAiProposal(repository.requestAiPlan(trip.id)) } }
-            .onSuccess { aiProposal = it; selectedAiItemIds = it.selectableIds; aiPlan = it.overview }
+            .onSuccess { aiProposal = it; aiProposalHistory = listOf(AiProposalHistory(it.id, it.status, it.createdAt, it.expiresAt)) + aiProposalHistory.filterNot { item -> item.id == it.id }; selectedAiItemIds = it.selectableIds; aiPlan = it.overview }
             .onFailure { aiError = if (repository.currentSession() == null) "Entre na sua conta para usar o copiloto." else it.message ?: "Não foi possível consultar o copiloto." }
+        aiLoading = false
+    }
+    fun loadAiProposals() = viewModelScope.launch {
+        val trip = uiState.value.activeTrip ?: return@launch
+        if (repository.currentSession() == null) return@launch
+        runCatching { withContext(Dispatchers.IO) { repository.aiProposals(trip.id) } }.onSuccess { values ->
+            val records = (0 until values.length()).map { values.getJSONObject(it) }
+            aiProposalHistory = records.map { AiProposalHistory(it.getString("id"), it.optString("status"), it.optString("createdAt"), it.optString("expiresAt")) }
+            records.firstOrNull { it.optString("status") == "DRAFT" }?.let { parseAiProposal(it) }?.let { aiProposal = it; selectedAiItemIds = it.selectableIds; aiPlan = it.overview }
+        }
+    }
+    fun dismissAiProposal() = viewModelScope.launch {
+        val proposal = aiProposal ?: return@launch
+        aiLoading = true
+        runCatching { withContext(Dispatchers.IO) { repository.dismissAiProposal(proposal.id) } }.onSuccess { record -> aiProposalHistory = aiProposalHistory.map { if (it.id == proposal.id) it.copy(status = record.optString("status")) else it }; aiProposal = null; selectedAiItemIds = emptySet(); aiPlan = "Proposta descartada sem alterar o planejamento." }.onFailure { aiError = it.message ?: "Não foi possível descartar a proposta." }
         aiLoading = false
     }
     fun importAiProposal() = viewModelScope.launch {
@@ -152,7 +169,7 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
             val category = runCatching { ExpenseCategory.valueOf(suggestion.category.uppercase()) }.getOrNull() ?: return@forEach
             repository.saveBudget(CategoryBudgetEntity(trip.id, category, trip.totalBudgetMinor * suggestion.percent.coerceIn(0, 100) / 100))
         }
-        aiLoading = false; aiProposal = null; selectedAiItemIds = emptySet(); aiPlan = "Itens selecionados adicionados ao planejamento."
+        aiLoading = false; aiProposalHistory = aiProposalHistory.map { if (it.id == proposal.id) it.copy(status = "APPLIED") else it }; aiProposal = null; selectedAiItemIds = emptySet(); aiPlan = "Itens selecionados adicionados ao planejamento."
     }
     fun toggleAiItem(id: String) { selectedAiItemIds = if (id in selectedAiItemIds) selectedAiItemIds - id else selectedAiItemIds + id }
     fun selectAllAiItems(selected: Boolean) { selectedAiItemIds = if (selected) aiProposal?.selectableIds.orEmpty() else emptySet() }
@@ -247,7 +264,7 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
         val checklist = array("checklist").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiChecklistSuggestion(it.getString("id"), it.optString("action", "ADD"), it.optString("targetId"), changes(it), it.optString("name"), it.optString("category", "OTHER"), it.optString("reason")) }.filter { it.name.isNotBlank() } }
         val budgets = array("budgets").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiBudgetSuggestion(it.getString("id"), it.optString("action", "UPDATE"), changes(it), it.optString("category"), it.optInt("percent"), it.optString("reason")) } }
         val sources = array("sources").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiSource(it.optString("title"), it.optString("url"), it.optString("checkedAt")) }.filter { it.url.isNotBlank() } }
-        return AiTravelProposal(record.getString("id"), proposal.optString("overview"), itinerary, checklist, budgets, sources, proposal.optString("generatedAt"))
+        return AiTravelProposal(record.getString("id"), record.optString("status", "DRAFT"), record.optString("createdAt"), record.optString("expiresAt"), proposal.optString("overview"), itinerary, checklist, budgets, sources, proposal.optString("generatedAt"))
     }
 
     class Factory(private val repository: TripRepository) : ViewModelProvider.Factory {

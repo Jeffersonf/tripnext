@@ -234,6 +234,11 @@ test("configura perfil, revisa proposta da IA e aplica somente itens escolhidos"
   await page.getByRole("button", { name: "Gerar proposta" }).click();
   await expect(page.getByText(/primeiro dia leve/i)).toBeVisible();
   await expect(page.getByText(/Combina com o ritmo leve/)).toBeVisible();
+  const savedStore = await page.evaluate(() => localStorage.getItem("tripnext-store"));
+  await page.addInitScript((value) => localStorage.setItem("tripnext-store", value), savedStore);
+  await page.reload();
+  await page.getByRole("button", { name: "Copiloto" }).click();
+  await expect(page.getByText(/primeiro dia leve/i)).toBeVisible();
   const task = page.locator(".ai-diff").filter({ hasText: "Separar documento" });
   await task.locator('input[type="checkbox"]').uncheck();
   await page.getByRole("button", { name: "Adicionar 2 item(ns) ao planejamento" }).click();
@@ -242,4 +247,9 @@ test("configura perfil, revisa proposta da IA e aplica somente itens escolhidos"
   await expect(page.getByRole("heading", { name: "Passeio pelo centro histórico" })).toBeVisible();
   await page.getByRole("button", { name: "Checklist" }).click();
   await expect(page.getByText("Separar documento de identificação")).toHaveCount(0);
+  await page.getByRole("button", { name: "Copiloto" }).click();
+  await page.getByRole("button", { name: "Gerar proposta" }).click();
+  await page.getByRole("button", { name: "Descartar" }).click();
+  await expect(page.getByText(/Proposta descartada sem alterar/)).toBeVisible();
+  await expect(page.getByText("Descartada", { exact: true })).toBeVisible();
 });

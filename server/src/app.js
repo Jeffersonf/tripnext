@@ -6,6 +6,7 @@ import { buildProposalDiff } from "./aiPlanner.js";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt });
+const presentProposal = (record) => record && ({ ...record, status: record.status === "DRAFT" && new Date(record.expiresAt) <= new Date() ? "EXPIRED" : record.status });
 const badRequest = (response, details) => response.status(400).json({ error: "validation_error", details });
 
 export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowedOrigins = [], aiPlanner = null }) {
@@ -90,7 +91,7 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
   });
   app.get("/api/trips/:tripId/ai/proposals", authenticate, async (request, response) => {
     if (!await store.tripRole(request.auth.sub, request.params.tripId)) return response.status(404).json({ error: "trip_not_found" });
-    response.json({ proposals: await store.listAiProposals(request.auth.sub, request.params.tripId) });
+    response.json({ proposals: (await store.listAiProposals(request.auth.sub, request.params.tripId)).map(presentProposal) });
   });
   app.post("/api/ai/proposals/:proposalId/apply", authenticate, async (request, response, next) => {
     try {
@@ -102,10 +103,15 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
       const uniqueIds = [...new Set(selectedItemIds)];
       if (uniqueIds.some(id => !available.has(id))) return response.status(409).json({ error: "invalid_proposal_selection" });
       if (existing.status === "APPLIED") return JSON.stringify(existing.selectedItemIds || []) === JSON.stringify(uniqueIds) ? response.json({ record: existing, duplicate: true }) : response.status(409).json({ error: "proposal_not_applicable" });
+      if (existing.status !== "DRAFT" || new Date(existing.expiresAt) <= new Date()) return response.status(409).json({ error: "proposal_not_applicable" });
       const record = await store.applyAiProposal(request.auth.sub, request.params.proposalId, uniqueIds);
       if (!record) return response.status(404).json({ error: "proposal_not_found" });
       response.json({ record });
     } catch (error) { if (error.code === "proposal_not_applicable") return response.status(409).json({ error: "proposal_not_applicable" }); next(error); }
+  });
+  app.post("/api/ai/proposals/:proposalId/dismiss", authenticate, async (request, response, next) => {
+    try { const existing = await store.aiProposal(request.auth.sub, request.params.proposalId); if (!existing) return response.status(404).json({ error: "proposal_not_found" }); if (existing.status !== "DRAFT") return response.status(409).json({ error: "proposal_not_applicable" }); const record = await store.dismissAiProposal(request.auth.sub, request.params.proposalId); if (!record) return response.status(404).json({ error: "proposal_not_found" }); response.json({ record: presentProposal(record) }); }
+    catch (error) { if (error.code === "proposal_not_applicable") return response.status(409).json({ error: "proposal_not_applicable" }); next(error); }
   });
 
   app.use((_request, response) => response.status(404).json({ error: "not_found" }));

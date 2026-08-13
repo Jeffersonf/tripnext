@@ -80,5 +80,14 @@ test("AI planning requires authentication, trip access and returns a proposal", 
   const applied = await appliedResponse.json(); assert.equal(appliedResponse.status, 200); assert.deepEqual(applied.record.selectedItemIds, [itemId]); assert.equal(applied.record.status, "APPLIED");
   const repeated = await fetch(`${aiUrl}/api/ai/proposals/${proposalId}/apply`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${user.body.token}` }, body: JSON.stringify({ selectedItemIds: [itemId] }) }).then(response => response.json());
   assert.equal(repeated.duplicate, true);
+  const second = await call(user.body.token, { tripId, context: { id: tripId, name: "Rio" } }), secondId = second.body.record.id;
+  const dismissedResponse = await fetch(`${aiUrl}/api/ai/proposals/${secondId}/dismiss`, { method: "POST", headers: { authorization: `Bearer ${user.body.token}` } });
+  assert.equal(dismissedResponse.status, 200); assert.equal((await dismissedResponse.json()).record.status, "DISMISSED");
+  const third = await call(user.body.token, { tripId, context: { id: tripId, name: "Rio" } }), thirdId = third.body.record.id;
+  store.aiProposals.get(thirdId).expiresAt = "2020-01-01T00:00:00.000Z";
+  const expiredList = await fetch(`${aiUrl}/api/trips/${tripId}/ai/proposals`, { headers: { authorization: `Bearer ${user.body.token}` } }).then(response => response.json());
+  assert.equal(expiredList.proposals.find(value => value.id === thirdId).status, "EXPIRED");
+  const expiredApply = await fetch(`${aiUrl}/api/ai/proposals/${thirdId}/apply`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${user.body.token}` }, body: JSON.stringify({ selectedItemIds: [third.body.record.proposal.itinerary[0].id] }) });
+  assert.equal(expiredApply.status, 409);
   await new Promise(resolve => aiServer.close(resolve));
 });

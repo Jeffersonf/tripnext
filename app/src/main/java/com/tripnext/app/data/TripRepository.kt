@@ -51,6 +51,8 @@ class TripRepository(
     suspend fun login(apiUrl: String, email: String, password: String) = remote.login(apiUrl, email, password)
     suspend fun requestAiPlan(tripId: String) = document(tripId)?.let { remote.plan(tripId, TripDocumentCodec.encode(it)) } ?: error("Viagem não encontrada.")
     suspend fun confirmAiPlan(proposalId: String, selectedItemIds: Set<String>) = remote.applyProposal(proposalId, selectedItemIds)
+    suspend fun aiProposals(tripId: String) = remote.proposals(tripId)
+    suspend fun dismissAiProposal(proposalId: String) = remote.dismissProposal(proposalId)
     fun logout() = remote.logout()
     private suspend fun document(tripId: String): TripDocument? = dao.tripNow(tripId)?.let { TripDocument(it, dao.itineraryNow(tripId), dao.ideasNow(tripId), dao.optionsNow(tripId), dao.checklistNow(tripId), dao.participantsNow(tripId), dao.budgetsNow(tripId)) }
     private suspend fun enqueueSnapshot(tripId: String) {

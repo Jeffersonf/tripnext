@@ -6,7 +6,7 @@ import YAML from "yaml";
 test("OpenAPI is valid YAML and documents every public route", async () => {
   const contract = YAML.parse(await readFile(new URL("../openapi.yaml", import.meta.url), "utf8"));
   assert.equal(contract.openapi, "3.1.0");
-  for (const route of ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/trips", "/api/trips/{tripId}", "/api/sync/push", "/api/sync/pull", "/api/ai/plan", "/api/trips/{tripId}/ai/proposals", "/api/ai/proposals/{proposalId}/apply"]) assert.ok(contract.paths[route], `${route} is missing`);
+  for (const route of ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/trips", "/api/trips/{tripId}", "/api/sync/push", "/api/sync/pull", "/api/ai/plan", "/api/trips/{tripId}/ai/proposals", "/api/ai/proposals/{proposalId}/apply", "/api/ai/proposals/{proposalId}/dismiss"]) assert.ok(contract.paths[route], `${route} is missing`);
   assert.equal(contract.components.securitySchemes.bearerAuth.scheme, "bearer");
 });
 

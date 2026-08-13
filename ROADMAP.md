@@ -519,15 +519,18 @@ Ordem exata de implementação:
 | 2026-08-13 | `server: npm test` | **PASS** — 13 testes ativos; contexto do Copiloto inclui o perfil por viagem sem alterar o contrato seguro |
 | 2026-08-13 | `web: npm test && npm run build` | **PASS** — 19 testes; aplicação seletiva da proposta e bundle de produção |
 | 2026-08-13 | `web: npm run test:e2e` | **PASS** — 5 jornadas; perfil, proposta autenticada, revisão, seleção parcial e importação no roteiro incluídos |
+| 2026-08-13 | `server: npm test` | **PASS** — ciclo DRAFT/APPLIED/DISMISSED/EXPIRED, seleção idempotente e expiração bloqueando aplicação |
+| 2026-08-13 | `web: npm test && npm run build && npm run test:e2e` | **PASS** — retomada após reload, validade, histórico e descarte sem alterar o plano |
+| 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — retomada, validade, histórico e descarte de proposta no Android |
 
 ## Próximo incremento executável
 
-1. Adicionar expiração visível, descarte e retomada das propostas pendentes no Android e web.
-2. Modelar destinos múltiplos/cidades por trecho, em vez de texto livre no destino.
-3. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
-4. Oferecer versões econômica, equilibrada e confortável com comparação de impacto no orçamento.
+1. Modelar destinos múltiplos/cidades por trecho, em vez de texto livre no destino.
+2. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
+3. Oferecer versões econômica, equilibrada e confortável com comparação de impacto no orçamento.
+4. Adicionar cota por usuário, rate limiting e avaliação automática de qualidade/viabilidade.
 5. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.
-6. Publicar a API e o PostgreSQL em homologação com HTTPS, cota por usuário, rate limiting e segredos gerenciados.
+6. Publicar a API e o PostgreSQL em homologação com HTTPS e segredos gerenciados.
 
 ## Princípios permanentes
 

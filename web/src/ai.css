@@ -21,5 +21,7 @@
 .ai-diff.ignored { opacity: .55; cursor: default; }.ai-diff.remove { border-color: #fecaca; }
 .ai-apply { width: 100%; justify-content: center; margin-top: 16px; min-height: 48px; }
 .ai-sources { display: grid; gap: 7px; margin-top: 18px; }.ai-sources a { display: flex; align-items: center; gap: 5px; color: var(--primary, #0d9488); }.ai-sources svg { width: 14px; }
+.ai-proposal .danger { color: #b91c1c; border-color: #fecaca; display: inline-flex; gap: 6px; align-items: center; }.ai-proposal .danger svg { width: 16px; }
+.ai-history { display: grid; gap: 8px; }.ai-history > div { display: flex; justify-content: space-between; border-top: 1px solid var(--border, #e5e7eb); padding-top: 8px; color: var(--muted, #64748b); }.ai-history b { color: inherit; }
 @media (max-width: 900px) { .ai-profile-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 620px) { .ai-profile-grid { grid-template-columns: 1fr; }.ai-actions { flex-direction: column; }.ai-actions button { justify-content: center; } }

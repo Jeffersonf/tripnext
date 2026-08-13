@@ -41,5 +41,6 @@ export function createApiClient(baseUrl, token = "") {
     planTrip: (trip) => request("/api/ai/plan", { method: "POST", body: { tripId: trip.id, context: trip } }),
     proposals: (tripId) => request(`/api/trips/${encodeURIComponent(tripId)}/ai/proposals`),
     applyProposal: (proposalId, selectedItemIds) => request(`/api/ai/proposals/${encodeURIComponent(proposalId)}/apply`, { method: "POST", body: { selectedItemIds } }),
+    dismissProposal: (proposalId) => request(`/api/ai/proposals/${encodeURIComponent(proposalId)}/dismiss`, { method: "POST" }),
   };
 }

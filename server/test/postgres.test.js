@@ -20,6 +20,8 @@ test("PostgreSQL migration is repeatable and sync persists idempotently", { skip
     assert.equal((await store.listAiProposals(user.id, trip.id))[0].id, proposal.id);
     const selectedId = proposal.proposal.itinerary[0].id, applied = await store.applyAiProposal(user.id, proposal.id, [selectedId]);
     assert.equal(applied.status, "APPLIED"); assert.deepEqual(applied.selectedItemIds, [selectedId]);
+    const disposable = await store.createAiProposal(user.id, trip.id, { itinerary: [], checklist: [], budgets: [] }), dismissed = await store.dismissAiProposal(user.id, disposable.id);
+    assert.equal(dismissed.status, "DISMISSED");
   } finally {
     await pool.end();
   }

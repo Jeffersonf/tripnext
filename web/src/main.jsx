@@ -1724,23 +1724,25 @@ const defaultPlanningProfile = (value = {}) => ({ origin: "", flexibleDates: fal
 const aiAction = { ADD: "Adicionar", UPDATE: "Alterar", MOVE: "Mover", REMOVE: "Remover", SKIP_DUPLICATE: "Duplicado", SKIP_UNCHANGED: "Sem alteração" };
 
 function CopilotPage({ trip, update, session, signIn }) {
-  const [profile, setProfile] = useState(() => defaultPlanningProfile(trip.planningProfile)), [record, setRecord] = useState(null), [selected, setSelected] = useState(new Set()), [status, setStatus] = useState("idle"), [error, setError] = useState("");
+  const [profile, setProfile] = useState(() => defaultPlanningProfile(trip.planningProfile)), [record, setRecord] = useState(null), [history, setHistory] = useState([]), [selected, setSelected] = useState(new Set()), [status, setStatus] = useState("idle"), [error, setError] = useState("");
   useEffect(() => setProfile(defaultPlanningProfile(trip.planningProfile)), [trip.id]);
+  useEffect(() => { if (!session) return; let active = true; createApiClient(session.apiUrl, session.token).proposals(trip.id).then(result => { if (!active) return; setHistory(result.proposals); const pending = result.proposals.find(value => value.status === "DRAFT"); if (pending) { setRecord(pending); setSelected(new Set(selectableProposalIds(pending.proposal))); setStatus("ready"); } }).catch(() => {}); return () => { active = false; }; }, [session?.token, trip.id]);
   const proposal = record?.proposal;
   const saveProfile = () => update({ planningProfile: profile });
   const generate = async () => {
     if (!session) return signIn();
     setStatus("loading"); setError(""); update({ planningProfile: profile });
-    try { const result = await createApiClient(session.apiUrl, session.token).planTrip({ ...trip, planningProfile: profile }); setRecord(result.record); setSelected(new Set(selectableProposalIds(result.record.proposal))); setStatus("ready"); }
+    try { const result = await createApiClient(session.apiUrl, session.token).planTrip({ ...trip, planningProfile: profile }); setRecord(result.record); setHistory(current => [result.record, ...current.filter(value => value.id !== result.record.id)]); setSelected(new Set(selectableProposalIds(result.record.proposal))); setStatus("ready"); }
     catch (cause) { setError(cause.status === 503 ? "O Copiloto ainda não está configurado neste servidor." : "Não foi possível gerar a proposta. Seu planejamento manual continua disponível."); setStatus("error"); }
   };
   const toggle = (id) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const apply = async () => {
     if (!record || !selected.size) return;
     setStatus("applying"); setError("");
-    try { await createApiClient(session.apiUrl, session.token).applyProposal(record.id, [...selected]); update(applySelectedProposal(trip, proposal, selected)); setRecord(null); setSelected(new Set()); setStatus("applied"); }
+    try { const result = await createApiClient(session.apiUrl, session.token).applyProposal(record.id, [...selected]); update(applySelectedProposal(trip, proposal, selected)); setHistory(current => current.map(value => value.id === record.id ? result.record : value)); setRecord(null); setSelected(new Set()); setStatus("applied"); }
     catch { setError("Não foi possível confirmar a proposta. Nenhum item foi aplicado."); setStatus("error"); }
   };
+  const dismiss = async () => { if (!record) return; setStatus("dismissing"); try { const result = await createApiClient(session.apiUrl, session.token).dismissProposal(record.id); setHistory(current => current.map(value => value.id === record.id ? result.record : value)); setRecord(null); setSelected(new Set()); setStatus("dismissed"); } catch { setError("Não foi possível descartar a proposta."); setStatus("error"); } };
   const fields = [
     ["origin", "Cidade/aeroporto de origem"], ["childAges", "Idades das crianças"], ["interests", "Interesses"], ["avoid", "O que evitar"], ["foodPreferences", "Estilo de alimentação"], ["dietaryRestrictions", "Restrições alimentares"], ["preferredTransport", "Transporte preferido"], ["mobilityNeeds", "Mobilidade e acessibilidade"],
   ];
@@ -1762,13 +1764,15 @@ function CopilotPage({ trip, update, session, signIn }) {
     </section>
     {error && <div className="ai-error"><AlertTriangle /> {error}</div>}
     {status === "applied" && <div className="ai-success"><CheckCircle2 /> Itens confirmados adicionados ao planejamento e à fila de sincronização.</div>}
+    {status === "dismissed" && <div className="ai-success"><CheckCircle2 /> Proposta descartada sem alterar o planejamento.</div>}
     {proposal && <section className="panel ai-proposal">
-      <p className="eyebrow">PROPOSTA REVISÁVEL</p><h2>{proposal.overview}</h2>
+      <div className="section-head"><div><p className="eyebrow">PROPOSTA REVISÁVEL</p><h2>{proposal.overview}</h2><small>Disponível até {new Date(record.expiresAt).toLocaleString("pt-BR")}</small></div><button className="outline danger" onClick={dismiss} disabled={status === "dismissing"}><Trash2 /> Descartar</button></div>
       <div className="ai-select-all"><span>{selected.size} de {selectableProposalIds(proposal).length} mudanças selecionadas</span><button className="text" onClick={() => setSelected(selected.size === selectableProposalIds(proposal).length ? new Set() : new Set(selectableProposalIds(proposal)))}>{selected.size === selectableProposalIds(proposal).length ? "Desmarcar tudo" : "Selecionar tudo"}</button></div>
       <div className="ai-diff-list">{allItems.map(item => { const ignored = ["SKIP_DUPLICATE", "SKIP_UNCHANGED"].includes(item.action); return <label className={`ai-diff ${ignored ? "ignored" : ""} ${item.action === "REMOVE" ? "remove" : ""}`} key={item.id}><input type="checkbox" disabled={ignored} checked={selected.has(item.id)} onChange={() => toggle(item.id)} /><div><b>{aiAction[item.action] || item.action} · {item.title || item.name || item.category}</b>{item.location && <span>{item.location}</span>}{item.percent != null && <span>{item.percent}% do orçamento</span>}{item.reason && <p>{item.reason}</p>}{(item.changes || []).map(change => <small key={change.field}>{change.field}: <del>{String(change.before ?? "—")}</del> → <ins>{String(change.after ?? "—")}</ins></small>)}</div></label>; })}</div>
       <button className="primary ai-apply" onClick={apply} disabled={!selected.size || status === "applying"}>{status === "applying" ? "Confirmando…" : `Adicionar ${selected.size} item(ns) ao planejamento`}</button>
       {!!proposal.sources?.length && <div className="ai-sources"><b>Fontes consultadas</b>{proposal.sources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} · {source.checkedAt}<ExternalLink /></a>)}</div>}
     </section>}
+    {!!history.length && <section className="panel ai-history"><p className="eyebrow">HISTÓRICO DE PROPOSTAS</p>{history.map(item => <div key={item.id}><span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span><b>{({ DRAFT: "Pendente", APPLIED: "Aplicada", DISMISSED: "Descartada", EXPIRED: "Expirada" })[item.status] || item.status}</b></div>)}</section>}
   </div>;
 }
 

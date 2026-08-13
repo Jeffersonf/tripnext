@@ -24,6 +24,8 @@ interface TripRemoteRepository {
     suspend fun pull(cursor: Long): PullResult
     suspend fun plan(tripId: String, context: JSONObject): JSONObject
     suspend fun applyProposal(proposalId: String, selectedItemIds: Set<String>): JSONObject
+    suspend fun proposals(tripId: String): JSONArray
+    suspend fun dismissProposal(proposalId: String): JSONObject
 }
 
 class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteRepository {
@@ -67,6 +69,8 @@ class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteR
         val session = requireSession()
         return request(session.apiUrl + "/api/ai/proposals/$proposalId/apply", "POST", JSONObject().put("selectedItemIds", JSONArray(selectedItemIds.toList())), session.token).getJSONObject("record")
     }
+    override suspend fun proposals(tripId: String): JSONArray { val session = requireSession(); return request(session.apiUrl + "/api/trips/$tripId/ai/proposals", "GET", null, session.token).getJSONArray("proposals") }
+    override suspend fun dismissProposal(proposalId: String): JSONObject { val session = requireSession(); return request(session.apiUrl + "/api/ai/proposals/$proposalId/dismiss", "POST", JSONObject(), session.token).getJSONObject("record") }
     private fun requireSession() = sessions.load() ?: error("Entre na sua conta para sincronizar.")
     private fun request(url: String, method: String, body: JSONObject?, token: String?) = requestRaw(url, method, body, token).let { if (it.first !in 200..299) errorFrom(it); JSONObject(it.second) }
     private fun errorFrom(response: Pair<Int, String>): Nothing { val code = runCatching { JSONObject(response.second).optString("error") }.getOrDefault(""); error(if (response.first == 401) "Sessão expirada." else "API ${response.first}: $code") }
