@@ -462,11 +462,11 @@ Ordem exata de implementação:
 
 1. [x] Criar API própria e banco PostgreSQL com migrations versionadas.
 2. [x] Implementar sessão segura e endpoints `/api/me` e `/api/trips`.
-3. [ ] Web sincroniza o documento completo da viagem (participantes, roteiro, alternativas e checklist); falta Android.
+3. [x] Web e Android sincronizam o documento completo da viagem (participantes, roteiro, alternativas e checklist).
 4. [x] Usar idempotency keys e tombstones para fila offline no servidor; integração dos clientes permanece no item 3.
-5. [x] Definir resolução explícita de conflito no web e mostrar estados local, sincronizando, sucesso, erro e conflito.
+5. [x] Definir resolução explícita de conflito no web e Android, com estados local, sincronizando, sucesso, erro e conflito.
 6. [ ] Remover a chave Gemini dos clientes e chamar IA apenas pelo backend.
-7. [x] Adicionar contrato OpenAPI e testes do servidor; testes de contrato dos clientes entram junto da integração.
+7. [x] Adicionar contrato OpenAPI, testes do servidor e teste de contrato Android contra a API real.
 8. [ ] Publicar ambientes de homologação e produção com segredos gerenciados.
 9. [ ] Recuperação da mesma viagem em uma nova carga web validada; falta validação cruzada com Android.
 
@@ -504,6 +504,17 @@ Ordem exata de implementação:
 | 2026-08-11 | `server: npm test` no GitHub Actions | **PASS** — 8 testes, incluindo migration e sync idempotente em PostgreSQL 17 real |
 | 2026-08-11 | `web: npm test` | **PASS** — 17 testes, incluindo fila deduplicada, tombstone e conflito |
 | 2026-08-11 | `web: npm run test:e2e` | **PASS** — 4 jornadas; conta, envio e recuperação da viagem pela API incluídos |
+| 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Room v8, sessão cifrada, fila deduplicada, contrato de sync Android compilado e APK gerado |
+| 2026-08-13 | `connectedDebugAndroidTest` | **PENDENTE** — aparelho não conectado; o contrato Android↔API está compilado, mas ainda precisa rodar no dispositivo físico |
+
+## Próximo incremento executável
+
+1. Mover o Gemini para `/api/ai/plan`, guardar a chave somente no servidor e retornar propostas revisáveis, nunca gravações automáticas.
+2. Exibir um diff antes de importar a proposta: dias, lugares, deslocamentos, custos previstos e tarefas que serão adicionados.
+3. Transformar sugestões aprovadas em itens reais do roteiro, alternativas comparáveis e checklist, mantendo fonte e data da pesquisa.
+4. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.
+5. Publicar a API e o PostgreSQL em homologação com HTTPS e segredos gerenciados; substituir o endereço manual de desenvolvimento por configuração de ambiente.
+6. Iniciar M5 com perguntas de planejamento úteis: origem, datas flexíveis, viajantes, ritmo, interesses, restrições e orçamento previsto.
 
 ## Princípios permanentes
 

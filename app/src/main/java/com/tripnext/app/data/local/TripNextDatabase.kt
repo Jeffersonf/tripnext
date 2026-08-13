@@ -6,7 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, OptionPriceObservationEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 7, exportSchema = true)
+@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, OptionPriceObservationEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 8, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class TripNextDatabase : RoomDatabase() {
     abstract fun tripDao(): TripDao
@@ -85,6 +85,15 @@ abstract class TripNextDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_option_price_observations_tripId ON option_price_observations(tripId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_option_price_observations_optionId ON option_price_observations(optionId)")
                 db.execSQL("INSERT INTO option_price_observations (id, tripId, optionId, priceMinor, currency, exchangeRate, observedAt) SELECT id || '-initial', tripId, id, estimatedCostMinor, currency, exchangeRate, observedAt FROM trip_options")
+            }
+        }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pending_operations ADD COLUMN tripId TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE pending_operations ADD COLUMN entityType TEXT NOT NULL DEFAULT 'trip_document'")
+                db.execSQL("ALTER TABLE pending_operations ADD COLUMN baseVersion INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE pending_operations ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("DELETE FROM pending_operations WHERE tripId = ''")
             }
         }
     }

@@ -25,6 +25,11 @@ interface TripDao {
     @Upsert suspend fun upsertIdea(value: TripIdeaEntity)
     @Upsert suspend fun upsertOption(value: TripOptionEntity)
     @Upsert suspend fun upsertOptionPrice(value: OptionPriceObservationEntity)
+    @Upsert suspend fun upsertEvents(values: List<ItineraryEventEntity>)
+    @Upsert suspend fun upsertIdeas(values: List<TripIdeaEntity>)
+    @Upsert suspend fun upsertOptions(values: List<TripOptionEntity>)
+    @Upsert suspend fun upsertChecklistItems(values: List<ChecklistItemEntity>)
+    @Upsert suspend fun upsertParticipants(values: List<TripParticipantEntity>)
     @Query("SELECT COUNT(*) FROM option_price_observations WHERE optionId = :optionId") suspend fun optionPriceCount(optionId: String): Int
     @Query("UPDATE trip_options SET chosen = CASE WHEN id = :optionId THEN 1 ELSE 0 END WHERE tripId = :tripId AND decisionGroup = :decisionGroup") suspend fun chooseOptionInGroup(tripId: String, decisionGroup: String, optionId: String)
     @Query("DELETE FROM trip_options WHERE id = :id") suspend fun deleteOption(id: String)
@@ -32,6 +37,12 @@ interface TripDao {
     @Upsert suspend fun upsertBudget(value: CategoryBudgetEntity)
     @Query("UPDATE checklist_items SET checked = NOT checked WHERE id = :id") suspend fun toggleChecklist(id: String)
     @Query("SELECT * FROM trips WHERE isActive = 1 LIMIT 1") suspend fun activeTrip(): TripEntity?
+    @Query("SELECT * FROM trips WHERE id = :id LIMIT 1") suspend fun tripNow(id: String): TripEntity?
+    @Query("SELECT * FROM itinerary_events WHERE tripId = :id ORDER BY startsAt, sortOrder") suspend fun itineraryNow(id: String): List<ItineraryEventEntity>
+    @Query("SELECT * FROM trip_ideas WHERE tripId = :id ORDER BY createdAt") suspend fun ideasNow(id: String): List<TripIdeaEntity>
+    @Query("SELECT * FROM trip_options WHERE tripId = :id ORDER BY decisionGroup, estimatedCostMinor") suspend fun optionsNow(id: String): List<TripOptionEntity>
+    @Query("SELECT * FROM checklist_items WHERE tripId = :id ORDER BY category, name") suspend fun checklistNow(id: String): List<ChecklistItemEntity>
+    @Query("SELECT * FROM trip_participants WHERE tripId = :id ORDER BY name") suspend fun participantsNow(id: String): List<TripParticipantEntity>
     @Query("SELECT COUNT(*) FROM category_budgets WHERE tripId = :tripId") suspend fun budgetCount(tripId: String): Int
     @Query("UPDATE trips SET isActive = CASE WHEN id = :id THEN 1 ELSE 0 END") suspend fun activateTrip(id: String)
     @Query("UPDATE trips SET archived = 1, isActive = 0 WHERE id = :id") suspend fun archiveTrip(id: String)
@@ -49,6 +60,11 @@ interface TripDao {
     @Query("DELETE FROM trip_vehicles WHERE tripId = :id") suspend fun deleteVehiclesForTrip(id: String)
     @Query("DELETE FROM trip_participants WHERE tripId = :id") suspend fun deleteParticipantsForTrip(id: String)
     @Query("DELETE FROM trips WHERE id = :id") suspend fun deleteTripRow(id: String)
+    @Transaction suspend fun replaceFromRemote(document: com.tripnext.app.data.TripDocument) {
+        val id = document.trip.id
+        upsertTrip(document.trip); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionPricesForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteParticipantsForTrip(id)
+        upsertEvents(document.itinerary); upsertIdeas(document.ideas); upsertOptions(document.options); upsertChecklistItems(document.checklist); upsertParticipants(document.participants)
+    }
     @Transaction suspend fun deleteTripFully(id: String) { deleteExpensesForTrip(id); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionPricesForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteBudgetsForTrip(id); deleteGoalsForTrip(id); deleteReservationsForTrip(id); deleteVehiclesForTrip(id); deleteParticipantsForTrip(id); deleteTripRow(id) }
     @Query("SELECT id FROM trips WHERE name = :name") suspend fun tripIdsNamed(name: String): List<String>
     @Transaction suspend fun deleteTripsNamed(name: String) { tripIdsNamed(name).forEach { deleteTripFully(it) } }
@@ -58,5 +74,8 @@ interface TripDao {
 interface PendingOperationDao {
     @Query("SELECT * FROM pending_operations ORDER BY createdAt") suspend fun all(): List<PendingOperationEntity>
     @Upsert suspend fun upsert(value: PendingOperationEntity)
+    @Query("SELECT * FROM pending_operations WHERE deduplicationKey = :key LIMIT 1") suspend fun byDeduplicationKey(key: String): PendingOperationEntity?
+    @Query("DELETE FROM pending_operations WHERE deduplicationKey = :key") suspend fun deleteByDeduplicationKey(key: String)
     @Query("DELETE FROM pending_operations WHERE id = :id") suspend fun delete(id: String)
+    @Transaction suspend fun replaceSnapshot(value: PendingOperationEntity) { deleteByDeduplicationKey(value.deduplicationKey); upsert(value) }
 }

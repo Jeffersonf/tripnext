@@ -75,4 +75,4 @@ data class TripVehicleEntity(@PrimaryKey val id: String = UUID.randomUUID().toSt
 data class TripParticipantEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val tripId: String, val name: String, val email: String, val role: ParticipantRole = ParticipantRole.GUEST)
 
 @Entity(tableName = "pending_operations", indices = [Index(value = ["deduplicationKey"], unique = true)])
-data class PendingOperationEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val kind: String, val entityId: String, val payload: String, val deduplicationKey: String, val createdAt: Long = System.currentTimeMillis(), val attempts: Int = 0)
+data class PendingOperationEntity(@PrimaryKey val id: String = UUID.randomUUID().toString(), val kind: String, val entityId: String, val payload: String, val deduplicationKey: String, val createdAt: Long = System.currentTimeMillis(), val attempts: Int = 0, val tripId: String = "", val entityType: String = "trip_document", val baseVersion: Long = 0, val deleted: Boolean = false)

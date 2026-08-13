@@ -43,6 +43,19 @@ class TripNextMigrationTest {
         }
     }
 
+    @Test
+    fun migration7To8DropsOnlyLegacyUnaddressableOperations() {
+        helper.createDatabase("$databaseName-v8", 7).apply {
+            insertTrip()
+            execSQL("INSERT INTO pending_operations (id,kind,entityId,payload,deduplicationKey,createdAt,attempts) VALUES ('old','UPSERT_TRIP','trip-1','{\"id\":\"trip-1\"}','UPSERT_TRIP:trip-1',1,0)")
+            close()
+        }
+        helper.runMigrationsAndValidate("$databaseName-v8", 8, true, TripNextDatabase.MIGRATION_7_8).use { db ->
+            db.query("SELECT name FROM trips WHERE id='trip-1'").use { cursor -> cursor.moveToFirst(); assertEquals("Rio", cursor.getString(0)) }
+            db.query("SELECT COUNT(*) FROM pending_operations").use { cursor -> cursor.moveToFirst(); assertEquals(0, cursor.getInt(0)) }
+        }
+    }
+
     private fun SupportSQLiteDatabase.insertTrip() = execSQL(
         "INSERT INTO trips (id,name,destination,startDate,endDate,totalBudgetMinor,currency,isActive,archived,travelers,updatedAt,contingencyPercent) VALUES ('trip-1','Rio','Rio',1,2,200000,'BRL',1,0,2,1,10)"
     )

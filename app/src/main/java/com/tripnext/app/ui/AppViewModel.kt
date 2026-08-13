@@ -43,6 +43,11 @@ data class AiTravelProposal(val overview: String, val itinerary: List<AiItinerar
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val repository: TripRepository) : ViewModel() {
+    var session by mutableStateOf(repository.currentSession()); private set
+    var sessionLoading by mutableStateOf(false); private set
+    var sessionError by mutableStateOf<String?>(null); private set
+    var syncStatus by mutableStateOf("Offline pronto"); private set
+    var syncConflicts by mutableStateOf<List<com.tripnext.app.data.PushResult>>(emptyList()); private set
     var aiPlan by mutableStateOf(""); private set
     var aiProposal by mutableStateOf<AiTravelProposal?>(null); private set
     var aiLoading by mutableStateOf(false); private set
@@ -91,6 +96,25 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     }
     fun addChecklist(name: String, category: ChecklistCategory = ChecklistCategory.OTHER) = viewModelScope.launch { selectedTripId.value?.let { repository.saveChecklist(ChecklistItemEntity(tripId = it, name = name, category = category)) } }
     fun toggleChecklist(id: String) = viewModelScope.launch { repository.toggleChecklist(id) }
+    fun register(apiUrl: String, name: String, email: String, password: String) = authenticate { repository.register(apiUrl, name, email, password) }
+    fun login(apiUrl: String, email: String, password: String) = authenticate { repository.login(apiUrl, email, password) }
+    private fun authenticate(block: suspend () -> com.tripnext.app.data.TripSession) = viewModelScope.launch {
+        sessionLoading = true; sessionError = null
+        runCatching { withContext(Dispatchers.IO) { block() } }.onSuccess { session = it; syncStatus = "Conta conectada" }.onFailure { sessionError = it.message ?: "Não foi possível entrar." }
+        sessionLoading = false
+    }
+    fun logout() { repository.logout(); session = null; syncStatus = "Offline pronto"; syncConflicts = emptyList() }
+    fun syncNow() = viewModelScope.launch {
+        syncStatus = "Sincronizando…"; sessionError = null
+        runCatching { withContext(Dispatchers.IO) { repository.sync() } }.onSuccess { result -> syncConflicts = result.conflicts; syncStatus = if (result.conflicts.isEmpty()) "${result.pushed} enviada(s), ${result.pulled} recebida(s)" else "${result.conflicts.size} conflito(s) aguardando resolução" }.onFailure { sessionError = it.message; syncStatus = "Plano salvo offline" }
+    }
+    fun resolveSyncConflicts(keepLocal: Boolean) = viewModelScope.launch {
+        val conflicts = syncConflicts
+        if (conflicts.isEmpty()) return@launch
+        runCatching { withContext(Dispatchers.IO) { repository.resolveConflicts(conflicts, keepLocal) } }
+            .onSuccess { syncConflicts = emptyList(); syncStatus = if (keepLocal) "Seu plano foi mantido; sincronize novamente" else "Plano do servidor restaurado" }
+            .onFailure { sessionError = it.message; syncStatus = "NÃ£o foi possÃ­vel resolver o conflito" }
+    }
     fun generateAiPlan(apiKey: String) = viewModelScope.launch {
         val trip = uiState.value.activeTrip ?: return@launch
         aiLoading = true; aiError = null
