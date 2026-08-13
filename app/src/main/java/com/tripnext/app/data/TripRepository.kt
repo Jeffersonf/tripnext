@@ -27,7 +27,9 @@ class TripRepository(
     }
     suspend fun saveTrip(trip: TripEntity) { dao.upsertTrip(trip); enqueueSnapshot(trip.id) }
     suspend fun saveChecklist(item: ChecklistItemEntity) { dao.upsertChecklist(item); enqueueSnapshot(item.tripId) }
+    suspend fun deleteChecklist(id: String, tripId: String) { dao.deleteChecklistItem(id); enqueueSnapshot(tripId) }
     suspend fun saveEvent(event: ItineraryEventEntity) { dao.upsertEvent(event); enqueueSnapshot(event.tripId) }
+    suspend fun deleteEvent(id: String, tripId: String) { dao.deleteEvent(id); enqueueSnapshot(tripId) }
     suspend fun saveIdea(idea: TripIdeaEntity) { dao.upsertIdea(idea); enqueueSnapshot(idea.tripId) }
     suspend fun deleteIdea(id: String) { val tripId = dao.ideasNow(dao.activeTrip()?.id.orEmpty()).firstOrNull { it.id == id }?.tripId; dao.deleteIdea(id); tripId?.let { enqueueSnapshot(it) } }
     suspend fun saveOption(option: TripOptionEntity) { dao.upsertOption(option); if (dao.optionPriceCount(option.id) == 0) dao.upsertOptionPrice(OptionPriceObservationEntity(tripId = option.tripId, optionId = option.id, priceMinor = option.estimatedCostMinor, currency = option.currency, exchangeRate = option.exchangeRate, observedAt = option.observedAt)); enqueueSnapshot(option.tripId) }
@@ -50,7 +52,7 @@ class TripRepository(
     suspend fun requestAiPlan(tripId: String) = document(tripId)?.let { remote.plan(tripId, TripDocumentCodec.encode(it)) } ?: error("Viagem não encontrada.")
     suspend fun confirmAiPlan(proposalId: String, selectedItemIds: Set<String>) = remote.applyProposal(proposalId, selectedItemIds)
     fun logout() = remote.logout()
-    private suspend fun document(tripId: String): TripDocument? = dao.tripNow(tripId)?.let { TripDocument(it, dao.itineraryNow(tripId), dao.ideasNow(tripId), dao.optionsNow(tripId), dao.checklistNow(tripId), dao.participantsNow(tripId)) }
+    private suspend fun document(tripId: String): TripDocument? = dao.tripNow(tripId)?.let { TripDocument(it, dao.itineraryNow(tripId), dao.ideasNow(tripId), dao.optionsNow(tripId), dao.checklistNow(tripId), dao.participantsNow(tripId), dao.budgetsNow(tripId)) }
     private suspend fun enqueueSnapshot(tripId: String) {
         val document = document(tripId) ?: return
         val previous = pendingDao.byDeduplicationKey("trip_document:$tripId")

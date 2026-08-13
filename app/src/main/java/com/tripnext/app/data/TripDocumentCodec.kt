@@ -7,7 +7,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-data class TripDocument(val trip: TripEntity, val itinerary: List<ItineraryEventEntity>, val ideas: List<TripIdeaEntity>, val options: List<TripOptionEntity>, val checklist: List<ChecklistItemEntity>, val participants: List<TripParticipantEntity>)
+data class TripDocument(val trip: TripEntity, val itinerary: List<ItineraryEventEntity>, val ideas: List<TripIdeaEntity>, val options: List<TripOptionEntity>, val checklist: List<ChecklistItemEntity>, val participants: List<TripParticipantEntity>, val budgets: List<CategoryBudgetEntity>)
 
 object TripDocumentCodec {
     private val zone get() = ZoneId.systemDefault()
@@ -22,6 +22,7 @@ object TripDocumentCodec {
         put("ideas", JSONArray(document.ideas.map { idea -> JSONObject().put("id", idea.id).put("type", typeToWeb(idea.type)).put("title", idea.title).put("location", idea.location).put("notes", idea.notes).put("cost", idea.estimatedCostMinor / 100.0).put("url", idea.sourceUrl).put("latitude", idea.latitude).put("longitude", idea.longitude).put("placeId", idea.placeId) }))
         put("options", JSONArray(document.options.map { option -> JSONObject().put("id", option.id).put("decision", option.decisionGroup).put("kind", typeToWeb(option.type)).put("title", option.title).put("provider", option.provider).put("location", option.location).put("price", option.estimatedCostMinor / 100.0).put("costCurrency", option.currency).put("cancellation", option.cancellationPolicy).put("baggage", option.inclusions).put("pros", option.pros).put("cons", option.cons).put("url", option.sourceUrl).put("chosen", option.chosen).put("observedAt", Instant.ofEpochMilli(option.observedAt).toString()) }))
         put("checklist", JSONArray(document.checklist.map { item -> JSONObject().put("id", item.id).put("name", item.name).put("category", item.category.name).put("done", item.checked) }))
+        put("categoryBudgets", JSONArray(document.budgets.map { item -> JSONObject().put("category", item.category.name).put("limitMinor", item.limitMinor) }))
     }
     fun decode(value: JSONObject): TripDocument {
         val id = value.getString("id")
@@ -32,7 +33,8 @@ object TripDocumentCodec {
         val options = value.optJSONArray("options").objects().map { item -> TripOptionEntity(id = item.optString("id", java.util.UUID.randomUUID().toString()), tripId = id, decisionGroup = item.optString("decision"), title = item.optString("title"), type = typeFromWeb(item.optString("kind")), provider = item.optString("provider"), location = item.optString("location"), estimatedCostMinor = (item.optDouble("price") * 100).toLong(), currency = item.optString("costCurrency", "BRL"), cancellationPolicy = item.optString("cancellation"), inclusions = item.optString("baggage"), pros = item.optString("pros"), cons = item.optString("cons"), sourceUrl = item.optString("url"), chosen = item.optBoolean("chosen")) }
         val checklist = value.optJSONArray("checklist").objects().map { item -> ChecklistItemEntity(id = item.optString("id", java.util.UUID.randomUUID().toString()), tripId = id, name = item.optString("name"), category = runCatching { ChecklistCategory.valueOf(item.optString("category")) }.getOrDefault(ChecklistCategory.OTHER), checked = item.optBoolean("done")) }
         val participants = value.optJSONArray("participants").objects().map { item -> TripParticipantEntity(id = item.optString("id", java.util.UUID.randomUUID().toString()), tripId = id, name = item.optString("name", "Viajante"), email = item.optString("email", "${item.optString("id")}@local.tripnext")) }
-        return TripDocument(trip, itinerary, ideas, options, checklist, participants)
+        val budgets = value.optJSONArray("categoryBudgets").objects().mapNotNull { item -> runCatching { CategoryBudgetEntity(id, ExpenseCategory.valueOf(item.optString("category")), item.optLong("limitMinor")) }.getOrNull() }
+        return TripDocument(trip, itinerary, ideas, options, checklist, participants, budgets)
     }
     private fun JSONArray?.objects() = if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
     private fun JSONObject.optNullableDouble(key: String) = if (isNull(key) || !has(key)) null else optDouble(key).takeUnless { it.isNaN() }

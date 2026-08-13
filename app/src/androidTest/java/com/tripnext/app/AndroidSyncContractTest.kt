@@ -28,6 +28,7 @@ class AndroidSyncContractTest {
             repository.saveTrip(trip)
             repository.saveEvent(ItineraryEventEntity(tripId = trip.id, title = "Marco Zero", type = ItineraryType.ACTIVITY, startsAt = trip.startDate + 36_000_000, location = "Recife Antigo"))
             repository.saveChecklist(ChecklistItemEntity(tripId = trip.id, name = "Separar protetor solar"))
+            repository.saveBudget(CategoryBudgetEntity(trip.id, ExpenseCategory.FOOD, 80_000))
             val summary = repository.sync()
             assertTrue(summary.pushed >= 1)
             val pulled = remote.pull(0).changes.filter { it.entityType == "trip_document" }
@@ -35,6 +36,7 @@ class AndroidSyncContractTest {
             assertEquals("Plano Android", document.trip.name)
             assertEquals("Marco Zero", document.itinerary.single().title)
             assertEquals("Separar protetor solar", document.checklist.single().name)
+            assertEquals(80_000, document.budgets.single().limitMinor)
         } finally { database.close() }
     }
 }

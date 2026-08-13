@@ -221,7 +221,7 @@ Objetivo: a IA deve propor mudanças e gravá-las somente após revisão do usu�
 - [ ] Completar apenas lacunas selecionadas.
 - [ ] Explicar conflitos, sazonalidade e riscos.
 - [ ] Converter conversa em alterações estruturadas.
-- [ ] Mostrar diff antes de aplicar: adicionar, mover, remover e alterar custo.
+- [x] Mostrar diff antes de aplicar: adicionar, mover, remover, alterar campos e custos previstos.
 - [x] Permitir aceitar por item ou aceitar tudo no Android.
 - [x] Registrar a origem da sugestão e quando foi gerada.
 
@@ -456,7 +456,7 @@ Critérios de aceite:
 - [x] **M2:** lugares estruturados, mapa, trechos, rota viária sob demanda, cache e alertas de deslocamento inviável.
 - [x] **M3:** comparação, moedas, faixas, custos por viajante, contingência, prazos e histórico manual de preços.
 - [ ] **M4:** backend, sessão e sync web↔Android implementados; homologação HTTPS e validação física cruzada ainda pendentes.
-- [ ] **M5:** backend seguro, propostas persistidas, diff de adição/duplicata e seleção individual no Android entregues; perfil completo, diff de mover/remover e paridade web ainda pendentes.
+- [ ] **M5:** backend seguro, propostas persistidas, diff completo e seleção individual no Android entregues; perfil completo e paridade web ainda pendentes.
 
 ## Próximo sprint recomendado — M4
 
@@ -513,13 +513,15 @@ Ordem exata de implementação:
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — copiloto Android usa `/api/ai/plan`, mostra proposta antes de importar e remove credencial legada |
 | 2026-08-13 | GitHub Actions `31726456737` | **PASS** — migration PostgreSQL 002, persistência/seleção de propostas, 17 testes web, 4 E2E, build e publicação Pages |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — seleção individual de roteiro, checklist e orçamento; IDs estáveis tornam a importação local idempotente |
+| 2026-08-13 | `server: npm test` | **PASS** — 13 testes ativos; diff determinístico cobre adicionar, alterar, mover, remover, duplicatas e orçamento por categoria |
+| 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Android mostra antes/depois e aplica update/move/remove pelo mesmo snapshot offline; orçamento previsto incluído no sync |
 
 ## Próximo incremento executável
 
-1. Evoluir o diff para detectar alterações, movimentações e remoções, com comparação campo a campo antes da gravação.
-2. Adicionar perfil de planejamento: origem, datas flexíveis, viajantes, ritmo, interesses, restrições, mobilidade e orçamento previsto.
-3. Levar o copiloto revisável também ao site e sincronizar apenas os itens confirmados.
-4. Adicionar expiração visível, descarte de proposta e retomada das propostas pendentes no Android e web.
+1. Adicionar perfil de planejamento: origem, datas flexíveis, viajantes, ritmo, interesses, restrições, mobilidade e orçamento previsto.
+2. Levar o copiloto revisável também ao site e sincronizar apenas os itens confirmados.
+3. Adicionar expiração visível, descarte de proposta e retomada das propostas pendentes no Android e web.
+4. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
 5. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.
 6. Publicar a API e o PostgreSQL em homologação com HTTPS, cota por usuário, rate limiting e segredos gerenciados.
 

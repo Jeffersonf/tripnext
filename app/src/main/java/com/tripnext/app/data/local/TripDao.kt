@@ -43,11 +43,14 @@ interface TripDao {
     @Query("SELECT * FROM trip_options WHERE tripId = :id ORDER BY decisionGroup, estimatedCostMinor") suspend fun optionsNow(id: String): List<TripOptionEntity>
     @Query("SELECT * FROM checklist_items WHERE tripId = :id ORDER BY category, name") suspend fun checklistNow(id: String): List<ChecklistItemEntity>
     @Query("SELECT * FROM trip_participants WHERE tripId = :id ORDER BY name") suspend fun participantsNow(id: String): List<TripParticipantEntity>
+    @Query("SELECT * FROM category_budgets WHERE tripId = :id ORDER BY category") suspend fun budgetsNow(id: String): List<CategoryBudgetEntity>
     @Query("SELECT COUNT(*) FROM category_budgets WHERE tripId = :tripId") suspend fun budgetCount(tripId: String): Int
     @Query("UPDATE trips SET isActive = CASE WHEN id = :id THEN 1 ELSE 0 END") suspend fun activateTrip(id: String)
     @Query("UPDATE trips SET archived = 1, isActive = 0 WHERE id = :id") suspend fun archiveTrip(id: String)
     @Query("UPDATE trips SET archived = 0 WHERE id = :id") suspend fun restoreTrip(id: String)
     @Query("DELETE FROM trip_ideas WHERE id = :id") suspend fun deleteIdea(id: String)
+    @Query("DELETE FROM itinerary_events WHERE id = :id") suspend fun deleteEvent(id: String)
+    @Query("DELETE FROM checklist_items WHERE id = :id") suspend fun deleteChecklistItem(id: String)
     @Query("DELETE FROM trip_ideas WHERE tripId = :id") suspend fun deleteIdeasForTrip(id: String)
     @Query("DELETE FROM trip_options WHERE tripId = :id") suspend fun deleteOptionsForTrip(id: String)
     @Query("DELETE FROM option_price_observations WHERE tripId = :id") suspend fun deleteOptionPricesForTrip(id: String)
@@ -62,8 +65,8 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :id") suspend fun deleteTripRow(id: String)
     @Transaction suspend fun replaceFromRemote(document: com.tripnext.app.data.TripDocument) {
         val id = document.trip.id
-        upsertTrip(document.trip); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionPricesForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteParticipantsForTrip(id)
-        upsertEvents(document.itinerary); upsertIdeas(document.ideas); upsertOptions(document.options); upsertChecklistItems(document.checklist); upsertParticipants(document.participants)
+        upsertTrip(document.trip); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionPricesForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteParticipantsForTrip(id); deleteBudgetsForTrip(id)
+        upsertEvents(document.itinerary); upsertIdeas(document.ideas); upsertOptions(document.options); upsertChecklistItems(document.checklist); upsertParticipants(document.participants); document.budgets.forEach { upsertBudget(it) }
     }
     @Transaction suspend fun deleteTripFully(id: String) { deleteExpensesForTrip(id); deleteEventsForTrip(id); deleteIdeasForTrip(id); deleteOptionPricesForTrip(id); deleteOptionsForTrip(id); deleteChecklistForTrip(id); deleteBudgetsForTrip(id); deleteGoalsForTrip(id); deleteReservationsForTrip(id); deleteVehiclesForTrip(id); deleteParticipantsForTrip(id); deleteTripRow(id) }
     @Query("SELECT id FROM trips WHERE name = :name") suspend fun tripIdsNamed(name: String): List<String>

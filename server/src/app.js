@@ -98,7 +98,7 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
       if (!Array.isArray(selectedItemIds) || selectedItemIds.length > 50 || selectedItemIds.some(id => !uuidPattern.test(String(id)))) return badRequest(response, "selectedItemIds must contain at most 50 UUIDs");
       const existing = await store.aiProposal(request.auth.sub, request.params.proposalId);
       if (!existing) return response.status(404).json({ error: "proposal_not_found" });
-      const available = new Set([...(existing.proposal.itinerary || []), ...(existing.proposal.checklist || []), ...(existing.proposal.budgets || [])].filter(item => item.action !== "SKIP_DUPLICATE").map(item => item.id));
+      const available = new Set([...(existing.proposal.itinerary || []), ...(existing.proposal.checklist || []), ...(existing.proposal.budgets || [])].filter(item => !["SKIP_DUPLICATE", "SKIP_UNCHANGED"].includes(item.action)).map(item => item.id));
       const uniqueIds = [...new Set(selectedItemIds)];
       if (uniqueIds.some(id => !available.has(id))) return response.status(409).json({ error: "invalid_proposal_selection" });
       if (existing.status === "APPLIED") return JSON.stringify(existing.selectedItemIds || []) === JSON.stringify(uniqueIds) ? response.json({ record: existing, duplicate: true }) : response.status(409).json({ error: "proposal_not_applicable" });

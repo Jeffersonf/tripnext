@@ -34,11 +34,12 @@ data class AppUiState(
     val remainingMinor get() = (activeTrip?.totalBudgetMinor ?: 0) - spentMinor
 }
 
-data class AiItinerarySuggestion(val id: String, val action: String, val dayOffset: Int, val time: String, val title: String, val location: String, val type: String, val estimatedCostMinor: Long, val sourceUrl: String, val reason: String)
-data class AiChecklistSuggestion(val id: String, val action: String, val name: String, val category: String, val reason: String)
-data class AiBudgetSuggestion(val id: String, val action: String, val category: String, val percent: Int, val reason: String)
+data class AiFieldChange(val field: String, val before: String, val after: String)
+data class AiItinerarySuggestion(val id: String, val action: String, val targetId: String, val changes: List<AiFieldChange>, val dayOffset: Int, val time: String, val title: String, val location: String, val type: String, val estimatedCostMinor: Long, val sourceUrl: String, val reason: String)
+data class AiChecklistSuggestion(val id: String, val action: String, val targetId: String, val changes: List<AiFieldChange>, val name: String, val category: String, val reason: String)
+data class AiBudgetSuggestion(val id: String, val action: String, val changes: List<AiFieldChange>, val category: String, val percent: Int, val reason: String)
 data class AiSource(val title: String, val url: String, val checkedAt: String)
-data class AiTravelProposal(val id: String, val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String) { val selectableIds get() = (itinerary.map { it.id to it.action } + checklist.map { it.id to it.action } + budgets.map { it.id to it.action }).filter { it.second != "SKIP_DUPLICATE" }.map { it.first }.toSet() }
+data class AiTravelProposal(val id: String, val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String) { val selectableIds get() = (itinerary.map { it.id to it.action } + checklist.map { it.id to it.action } + budgets.map { it.id to it.action }).filter { it.second !in setOf("SKIP_DUPLICATE", "SKIP_UNCHANGED") }.map { it.first }.toSet() }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val repository: TripRepository) : ViewModel() {
@@ -133,14 +134,18 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
         val zone = ZoneId.systemDefault()
         val start = java.time.Instant.ofEpochMilli(trip.startDate).atZone(zone).toLocalDate()
         proposal.itinerary.filter { it.id in selected }.forEach { suggestion ->
+            if (suggestion.action == "REMOVE") { repository.deleteEvent(suggestion.targetId, trip.id); return@forEach }
             val parsedTime = runCatching { java.time.LocalTime.parse(suggestion.time) }.getOrDefault(java.time.LocalTime.of(9, 0))
             val instant = start.plusDays(suggestion.dayOffset.coerceAtLeast(0).toLong()).atTime(parsedTime).atZone(zone).toInstant().toEpochMilli()
             val type = runCatching { ItineraryType.valueOf(suggestion.type.uppercase()) }.getOrDefault(ItineraryType.ACTIVITY)
-            repository.saveEvent(ItineraryEventEntity(id = suggestion.id, tripId = trip.id, title = suggestion.title, type = type, startsAt = instant, location = suggestion.location, notes = suggestion.reason, estimatedCostMinor = suggestion.estimatedCostMinor, sourceUrl = suggestion.sourceUrl, quoteDate = System.currentTimeMillis()))
+            val current = uiState.value.itinerary.firstOrNull { it.id == suggestion.targetId }
+            repository.saveEvent((current ?: ItineraryEventEntity(id = suggestion.id, tripId = trip.id, title = suggestion.title, type = type, startsAt = instant)).copy(title = suggestion.title, type = type, startsAt = instant, location = suggestion.location, notes = suggestion.reason, estimatedCostMinor = suggestion.estimatedCostMinor, sourceUrl = suggestion.sourceUrl, quoteDate = System.currentTimeMillis()))
         }
         proposal.checklist.filter { it.id in selected }.forEach { suggestion ->
+            if (suggestion.action == "REMOVE") { repository.deleteChecklist(suggestion.targetId, trip.id); return@forEach }
             val category = runCatching { ChecklistCategory.valueOf(suggestion.category.uppercase()) }.getOrDefault(ChecklistCategory.OTHER)
-            repository.saveChecklist(ChecklistItemEntity(id = suggestion.id, tripId = trip.id, name = suggestion.name, category = category))
+            val current = uiState.value.checklist.firstOrNull { it.id == suggestion.targetId }
+            repository.saveChecklist((current ?: ChecklistItemEntity(id = suggestion.id, tripId = trip.id, name = suggestion.name)).copy(name = suggestion.name, category = category))
         }
         proposal.budgets.filter { it.id in selected }.forEach { suggestion ->
             val category = runCatching { ExpenseCategory.valueOf(suggestion.category.uppercase()) }.getOrNull() ?: return@forEach
@@ -232,9 +237,10 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     private fun parseAiProposal(record: JSONObject): AiTravelProposal {
         val proposal = record.getJSONObject("proposal")
         fun array(name: String) = proposal.optJSONArray(name) ?: org.json.JSONArray()
-        val itinerary = array("itinerary").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiItinerarySuggestion(it.getString("id"), it.optString("action", "ADD"), it.optInt("dayOffset"), it.optString("time", "09:00"), it.optString("title"), it.optString("location"), it.optString("type", "ACTIVITY"), it.optLong("estimatedCostMinor"), it.optString("sourceUrl"), it.optString("reason")) }.filter { it.title.isNotBlank() } }
-        val checklist = array("checklist").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiChecklistSuggestion(it.getString("id"), it.optString("action", "ADD"), it.optString("name"), it.optString("category", "OTHER"), it.optString("reason")) }.filter { it.name.isNotBlank() } }
-        val budgets = array("budgets").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiBudgetSuggestion(it.getString("id"), it.optString("action", "UPDATE"), it.optString("category"), it.optInt("percent"), it.optString("reason")) } }
+        fun changes(item: JSONObject) = (item.optJSONArray("changes") ?: org.json.JSONArray()).let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiFieldChange(it.optString("field"), it.optString("before"), it.optString("after")) } }
+        val itinerary = array("itinerary").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiItinerarySuggestion(it.getString("id"), it.optString("action", "ADD"), it.optString("targetId"), changes(it), it.optInt("dayOffset"), it.optString("time", "09:00"), it.optString("title"), it.optString("location"), it.optString("type", "ACTIVITY"), it.optLong("estimatedCostMinor"), it.optString("sourceUrl"), it.optString("reason")) }.filter { it.title.isNotBlank() } }
+        val checklist = array("checklist").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiChecklistSuggestion(it.getString("id"), it.optString("action", "ADD"), it.optString("targetId"), changes(it), it.optString("name"), it.optString("category", "OTHER"), it.optString("reason")) }.filter { it.name.isNotBlank() } }
+        val budgets = array("budgets").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiBudgetSuggestion(it.getString("id"), it.optString("action", "UPDATE"), changes(it), it.optString("category"), it.optInt("percent"), it.optString("reason")) } }
         val sources = array("sources").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiSource(it.optString("title"), it.optString("url"), it.optString("checkedAt")) }.filter { it.url.isNotBlank() } }
         return AiTravelProposal(record.getString("id"), proposal.optString("overview"), itinerary, checklist, budgets, sources, proposal.optString("generatedAt"))
     }

@@ -18,5 +18,18 @@ test("keeps the Gemini key in the server request header", async () => {
 test("diff marks existing itinerary and checklist items as non-selectable duplicates", () => {
   const proposal = normalizeProposal({ overview: "Plano", itinerary: [{ title: "Museu", location: "Centro", type: "ACTIVITY" }, { title: "Praia", location: "Orla", type: "ACTIVITY" }], checklist: [{ name: "Passaporte", category: "DOCUMENTS" }], budgets: [{ category: "FOOD", percent: 20 }], sources: [] });
   const diff = buildProposalDiff(proposal, { itinerary: [{ id: "event-1", title: "museu", location: "CENTRO" }], checklist: [{ id: "task-1", name: "passaporte" }] });
-  assert.equal(diff.itinerary[0].action, "SKIP_DUPLICATE"); assert.equal(diff.itinerary[0].targetId, "event-1"); assert.equal(diff.itinerary[1].action, "ADD"); assert.equal(diff.checklist[0].action, "SKIP_DUPLICATE"); assert.equal(diff.budgets[0].action, "UPDATE");
+  assert.equal(diff.itinerary[0].action, "SKIP_DUPLICATE"); assert.equal(diff.itinerary[0].targetId, "event-1"); assert.equal(diff.itinerary[1].action, "ADD"); assert.equal(diff.checklist[0].action, "SKIP_DUPLICATE"); assert.equal(diff.budgets[0].action, "ADD");
+});
+
+test("diff derives move, update and remove operations only for valid existing ids", () => {
+  const proposal = normalizeProposal({ overview: "Replanejar", itinerary: [{ operation: "MOVE", targetId: "event-1", dayOffset: 2, time: "14:00", title: "Museu", location: "Centro", type: "ACTIVITY", estimatedCostMinor: 3000 }, { operation: "REMOVE", targetId: "event-2", title: "Passeio cancelado", type: "ACTIVITY" }], checklist: [{ operation: "UPDATE", targetId: "task-1", name: "Passaporte válido", category: "DOCUMENTS" }, { operation: "REMOVE", targetId: "missing", name: "Não existe", category: "OTHER" }], budgets: [], sources: [] });
+  const context = { start: "2026-10-10", itinerary: [{ id: "event-1", title: "Museu", location: "Centro", date: "2026-10-10", time: "09:00", cost: 20 }, { id: "event-2", title: "Passeio cancelado", location: "", date: "2026-10-11", time: "09:00", cost: 0 }], checklist: [{ id: "task-1", name: "Passaporte", category: "DOCUMENTS" }] };
+  const diff = buildProposalDiff(proposal, context);
+  assert.equal(diff.itinerary[0].action, "MOVE"); assert.deepEqual(diff.itinerary[0].changes.map(value => value.field), ["date", "time", "cost"]); assert.equal(diff.itinerary[1].action, "REMOVE"); assert.equal(diff.checklist[0].action, "UPDATE"); assert.equal(diff.checklist[1].action, "ADD");
+});
+
+test("diff compares category budget percentages against the current trip", () => {
+  const proposal = normalizeProposal({ overview: "Custos", itinerary: [], checklist: [], budgets: [{ category: "FOOD", percent: 25 }, { category: "TRANSPORT", percent: 30 }], sources: [] });
+  const diff = buildProposalDiff(proposal, { budget: 1000, categoryBudgets: [{ category: "FOOD", limitMinor: 20000 }] });
+  assert.equal(diff.budgets[0].action, "UPDATE"); assert.deepEqual(diff.budgets[0].changes[0], { field: "percent", before: 20, after: 25 }); assert.equal(diff.budgets[1].action, "ADD");
 });
