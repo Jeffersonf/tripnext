@@ -34,6 +34,8 @@ import {
   RefreshCw,
   LogIn,
   LogOut,
+  Sparkles,
+  SlidersHorizontal,
 } from "lucide-react";
 import "./style.css";
 import "./improvements.css";
@@ -68,6 +70,7 @@ import "./logistics.css";
 import "./comparisons.css";
 import "./sync.css";
 import "./sync-extra.css";
+import "./ai.css";
 import { fetchDrivingRoute } from "./routeProvider.js";
 import { createApiClient } from "./apiClient.js";
 import {
@@ -75,6 +78,7 @@ import {
   queueTripSync,
   synchronizeStore,
 } from "./syncClient.js";
+import { applySelectedProposal, selectableProposalIds } from "./aiProposal.js";
 
 const TYPES = {
   transporte: { label: "Transporte", icon: Train, color: "#2563eb" },
@@ -574,6 +578,7 @@ function App() {
             />
           )}
           {tab === "custos" && <Costs trip={trip} edit={openEdit} />}
+          {tab === "copiloto" && <CopilotPage trip={trip} update={update} session={session} signIn={() => setModal("auth")} />}
           {tab === "checklist" && (
             <Checklist
               trip={trip}
@@ -625,6 +630,7 @@ function Sidebar({ tab, setTab, trip, trips, select, create, session }) {
     ["itinerario", "Roteiro", CalendarDays],
     ["ideias", "Ideias", Lightbulb],
     ["comparar", "Comparar", GitCompareArrows],
+    ["copiloto", "Copiloto", Sparkles],
     ["custos", "Custos previstos", Wallet],
     ["checklist", "Checklist", ListChecks],
     ["ajustes", "Ajustes", Compass],
@@ -1714,6 +1720,58 @@ function Comparisons({ trip, update, open, schedule }) {
     </div>
   );
 }
+const defaultPlanningProfile = (value = {}) => ({ origin: "", flexibleDates: false, children: 0, childAges: "", interests: "", avoid: "", pace: "BALANCED", preferredStartHour: 9, restMinutes: 60, foodPreferences: "", dietaryRestrictions: "", preferredTransport: "", maxWalkingMinutes: 30, mobilityNeeds: "", ...value });
+const aiAction = { ADD: "Adicionar", UPDATE: "Alterar", MOVE: "Mover", REMOVE: "Remover", SKIP_DUPLICATE: "Duplicado", SKIP_UNCHANGED: "Sem alteração" };
+
+function CopilotPage({ trip, update, session, signIn }) {
+  const [profile, setProfile] = useState(() => defaultPlanningProfile(trip.planningProfile)), [record, setRecord] = useState(null), [selected, setSelected] = useState(new Set()), [status, setStatus] = useState("idle"), [error, setError] = useState("");
+  useEffect(() => setProfile(defaultPlanningProfile(trip.planningProfile)), [trip.id]);
+  const proposal = record?.proposal;
+  const saveProfile = () => update({ planningProfile: profile });
+  const generate = async () => {
+    if (!session) return signIn();
+    setStatus("loading"); setError(""); update({ planningProfile: profile });
+    try { const result = await createApiClient(session.apiUrl, session.token).planTrip({ ...trip, planningProfile: profile }); setRecord(result.record); setSelected(new Set(selectableProposalIds(result.record.proposal))); setStatus("ready"); }
+    catch (cause) { setError(cause.status === 503 ? "O Copiloto ainda não está configurado neste servidor." : "Não foi possível gerar a proposta. Seu planejamento manual continua disponível."); setStatus("error"); }
+  };
+  const toggle = (id) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const apply = async () => {
+    if (!record || !selected.size) return;
+    setStatus("applying"); setError("");
+    try { await createApiClient(session.apiUrl, session.token).applyProposal(record.id, [...selected]); update(applySelectedProposal(trip, proposal, selected)); setRecord(null); setSelected(new Set()); setStatus("applied"); }
+    catch { setError("Não foi possível confirmar a proposta. Nenhum item foi aplicado."); setStatus("error"); }
+  };
+  const fields = [
+    ["origin", "Cidade/aeroporto de origem"], ["childAges", "Idades das crianças"], ["interests", "Interesses"], ["avoid", "O que evitar"], ["foodPreferences", "Estilo de alimentação"], ["dietaryRestrictions", "Restrições alimentares"], ["preferredTransport", "Transporte preferido"], ["mobilityNeeds", "Mobilidade e acessibilidade"],
+  ];
+  const allItems = proposal ? [...proposal.itinerary, ...proposal.checklist, ...proposal.budgets] : [];
+  return <div className="page ai-page">
+    <Header title="Copiloto de viagem" subtitle="A IA pesquisa e propõe; você revisa cada mudança antes de salvar." />
+    <section className="ai-profile panel">
+      <div className="section-head"><div><p className="eyebrow">PERFIL DE PLANEJAMENTO</p><h2>Como vocês gostam de viajar?</h2></div><SlidersHorizontal /></div>
+      <div className="ai-profile-grid">
+        {fields.map(([key, label]) => <label key={key}>{label}<input value={profile[key]} onChange={event => setProfile({ ...profile, [key]: event.target.value })} /></label>)}
+        <label>Crianças<input aria-label="Número de crianças" type="number" min="0" value={profile.children} onChange={event => setProfile({ ...profile, children: Number(event.target.value) })} /></label>
+        <label>Ritmo<select aria-label="Ritmo da viagem" value={profile.pace} onChange={event => setProfile({ ...profile, pace: event.target.value })}><option value="LIGHT">Leve</option><option value="BALANCED">Equilibrado</option><option value="INTENSE">Intenso</option></select></label>
+        <label>Começar o dia às<input aria-label="Horário para começar" type="number" min="5" max="14" value={profile.preferredStartHour} onChange={event => setProfile({ ...profile, preferredStartHour: Number(event.target.value) })} /></label>
+        <label>Descanso entre blocos (min)<input type="number" min="0" value={profile.restMinutes} onChange={event => setProfile({ ...profile, restMinutes: Number(event.target.value) })} /></label>
+        <label>Limite de caminhada (min)<input type="number" min="5" value={profile.maxWalkingMinutes} onChange={event => setProfile({ ...profile, maxWalkingMinutes: Number(event.target.value) })} /></label>
+        <label className="ai-switch"><input type="checkbox" checked={profile.flexibleDates} onChange={event => setProfile({ ...profile, flexibleDates: event.target.checked })} /> Datas flexíveis</label>
+      </div>
+      <div className="ai-actions"><button className="outline" onClick={saveProfile}>Salvar perfil</button><button className="primary" onClick={generate} disabled={status === "loading"}>{status === "loading" ? "Pesquisando…" : proposal ? "Atualizar proposta" : "Gerar proposta"}<Sparkles /></button></div>
+    </section>
+    {error && <div className="ai-error"><AlertTriangle /> {error}</div>}
+    {status === "applied" && <div className="ai-success"><CheckCircle2 /> Itens confirmados adicionados ao planejamento e à fila de sincronização.</div>}
+    {proposal && <section className="panel ai-proposal">
+      <p className="eyebrow">PROPOSTA REVISÁVEL</p><h2>{proposal.overview}</h2>
+      <div className="ai-select-all"><span>{selected.size} de {selectableProposalIds(proposal).length} mudanças selecionadas</span><button className="text" onClick={() => setSelected(selected.size === selectableProposalIds(proposal).length ? new Set() : new Set(selectableProposalIds(proposal)))}>{selected.size === selectableProposalIds(proposal).length ? "Desmarcar tudo" : "Selecionar tudo"}</button></div>
+      <div className="ai-diff-list">{allItems.map(item => { const ignored = ["SKIP_DUPLICATE", "SKIP_UNCHANGED"].includes(item.action); return <label className={`ai-diff ${ignored ? "ignored" : ""} ${item.action === "REMOVE" ? "remove" : ""}`} key={item.id}><input type="checkbox" disabled={ignored} checked={selected.has(item.id)} onChange={() => toggle(item.id)} /><div><b>{aiAction[item.action] || item.action} · {item.title || item.name || item.category}</b>{item.location && <span>{item.location}</span>}{item.percent != null && <span>{item.percent}% do orçamento</span>}{item.reason && <p>{item.reason}</p>}{(item.changes || []).map(change => <small key={change.field}>{change.field}: <del>{String(change.before ?? "—")}</del> → <ins>{String(change.after ?? "—")}</ins></small>)}</div></label>; })}</div>
+      <button className="primary ai-apply" onClick={apply} disabled={!selected.size || status === "applying"}>{status === "applying" ? "Confirmando…" : `Adicionar ${selected.size} item(ns) ao planejamento`}</button>
+      {!!proposal.sources?.length && <div className="ai-sources"><b>Fontes consultadas</b>{proposal.sources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.title} · {source.checkedAt}<ExternalLink /></a>)}</div>}
+    </section>}
+  </div>;
+}
+
 function Costs({ trip, edit }) {
   const events = trip.itinerary || [],
     summary = summarizeCosts(events, trip.participants || trip.travelers),

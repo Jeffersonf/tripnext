@@ -222,7 +222,7 @@ Objetivo: a IA deve propor mudanças e gravá-las somente após revisão do usu�
 - [ ] Explicar conflitos, sazonalidade e riscos.
 - [ ] Converter conversa em alterações estruturadas.
 - [x] Mostrar diff antes de aplicar: adicionar, mover, remover, alterar campos e custos previstos.
-- [x] Permitir aceitar por item ou aceitar tudo no Android.
+- [x] Permitir aceitar por item ou aceitar tudo no Android e web.
 - [x] Registrar a origem da sugestão e quando foi gerada.
 
 ### Segurança e qualidade
@@ -456,7 +456,7 @@ Critérios de aceite:
 - [x] **M2:** lugares estruturados, mapa, trechos, rota viária sob demanda, cache e alertas de deslocamento inviável.
 - [x] **M3:** comparação, moedas, faixas, custos por viajante, contingência, prazos e histórico manual de preços.
 - [ ] **M4:** backend, sessão e sync web↔Android implementados; homologação HTTPS e validação física cruzada ainda pendentes.
-- [ ] **M5:** backend seguro, propostas persistidas, diff completo e seleção individual no Android entregues; perfil completo e paridade web ainda pendentes.
+- [ ] **M5:** backend seguro, propostas persistidas, perfil, diff completo e seleção individual no Android e web entregues; destinos múltiplos, replanejamento parcial e qualidade avançada ainda pendentes.
 
 ## Próximo sprint recomendado — M4
 
@@ -517,13 +517,15 @@ Ordem exata de implementação:
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Android mostra antes/depois e aplica update/move/remove pelo mesmo snapshot offline; orçamento previsto incluído no sync |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Room v9, migração 8→9, perfil detalhado sincronizado e APK gerado |
 | 2026-08-13 | `server: npm test` | **PASS** — 13 testes ativos; contexto do Copiloto inclui o perfil por viagem sem alterar o contrato seguro |
+| 2026-08-13 | `web: npm test && npm run build` | **PASS** — 19 testes; aplicação seletiva da proposta e bundle de produção |
+| 2026-08-13 | `web: npm run test:e2e` | **PASS** — 5 jornadas; perfil, proposta autenticada, revisão, seleção parcial e importação no roteiro incluídos |
 
 ## Próximo incremento executável
 
-1. Levar o perfil e o copiloto revisável ao site, sincronizando apenas os itens confirmados.
+1. Adicionar expiração visível, descarte e retomada das propostas pendentes no Android e web.
 2. Modelar destinos múltiplos/cidades por trecho, em vez de texto livre no destino.
-3. Adicionar expiração visível, descarte de proposta e retomada das propostas pendentes no Android e web.
-4. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
+3. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
+4. Oferecer versões econômica, equilibrada e confortável com comparação de impacto no orçamento.
 5. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.
 6. Publicar a API e o PostgreSQL em homologação com HTTPS, cota por usuário, rate limiting e segredos gerenciados.
 

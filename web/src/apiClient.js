@@ -38,5 +38,8 @@ export function createApiClient(baseUrl, token = "") {
       request("/api/sync/push", { method: "POST", body: { operations } }),
     pull: (cursor = 0) =>
       request(`/api/sync/pull?cursor=${encodeURIComponent(cursor)}`),
+    planTrip: (trip) => request("/api/ai/plan", { method: "POST", body: { tripId: trip.id, context: trip } }),
+    proposals: (tripId) => request(`/api/trips/${encodeURIComponent(tripId)}/ai/proposals`),
+    applyProposal: (proposalId, selectedItemIds) => request(`/api/ai/proposals/${encodeURIComponent(proposalId)}/apply`, { method: "POST", body: { selectedItemIds } }),
   };
 }

@@ -209,3 +209,37 @@ test("cria conta, sincroniza e recupera a viagem sem o armazenamento local", asy
     page.getByRole("heading", { name: "Viagem sincronizada" }),
   ).toBeVisible();
 });
+
+test("configura perfil, revisa proposta da IA e aplica somente itens escolhidos", async ({ page }) => {
+  const email = `copilot-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+  await page.getByRole("button", { name: "Começar a planejar" }).click();
+  await page.getByLabel("Nome do plano").fill("Recife com calma");
+  await page.getByLabel("Para onde você vai?").fill("Recife");
+  await page.getByLabel("Data de ida").fill("2027-08-10");
+  await page.getByLabel("Data de volta").fill("2027-08-13");
+  await page.getByLabel("Teto previsto (opcional)").fill("3000");
+  await page.getByRole("button", { name: "Criar meu planejamento" }).click();
+  await page.getByRole("button", { name: "Ajustes" }).click();
+  await page.getByRole("button", { name: "Entrar ou criar conta" }).click();
+  await page.getByRole("button", { name: "Ainda não tenho conta" }).click();
+  await page.getByLabel("Seu nome").fill("Pessoa Copiloto");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha").fill("senha-segura-123");
+  await page.getByRole("button", { name: "Criar conta e entrar" }).click();
+  await page.getByRole("button", { name: "Sincronizar agora" }).click();
+  await page.getByRole("button", { name: "Copiloto" }).click();
+  await page.getByLabel("Cidade/aeroporto de origem").fill("São Paulo");
+  await page.getByLabel("Interesses").fill("história e gastronomia");
+  await page.getByLabel("Ritmo da viagem").selectOption("LIGHT");
+  await page.getByRole("button", { name: "Gerar proposta" }).click();
+  await expect(page.getByText(/primeiro dia leve/i)).toBeVisible();
+  await expect(page.getByText(/Combina com o ritmo leve/)).toBeVisible();
+  const task = page.locator(".ai-diff").filter({ hasText: "Separar documento" });
+  await task.locator('input[type="checkbox"]').uncheck();
+  await page.getByRole("button", { name: "Adicionar 2 item(ns) ao planejamento" }).click();
+  await expect(page.getByText(/Itens confirmados adicionados/)).toBeVisible();
+  await page.getByRole("button", { name: "Roteiro" }).click();
+  await expect(page.getByRole("heading", { name: "Passeio pelo centro histórico" })).toBeVisible();
+  await page.getByRole("button", { name: "Checklist" }).click();
+  await expect(page.getByText("Separar documento de identificação")).toHaveCount(0);
+});
