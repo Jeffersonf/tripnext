@@ -24,7 +24,7 @@ class AndroidSyncContractTest {
             val remote = HttpTripRemoteRepository(SessionStore(context))
             remote.register("http://127.0.0.1:8787", "Android Test", "android-${UUID.randomUUID()}@example.com", "senha-segura-123")
             val repository = TripRepository(database.tripDao(), database.pendingOperationDao(), remote)
-            val trip = TripEntity(id = "android-${UUID.randomUUID()}", name = "Plano Android", destination = "Recife", startDate = 1_830_297_600_000, endDate = 1_830_556_800_000, totalBudgetMinor = 400_000)
+            val trip = TripEntity(id = "android-${UUID.randomUUID()}", name = "Plano Android", destination = "Recife", startDate = 1_830_297_600_000, endDate = 1_830_556_800_000, totalBudgetMinor = 400_000, origin = "São Paulo", children = 1, childAges = "8", interests = "praias, cultura", pace = "LIGHT", dietaryRestrictions = "sem lactose", maxWalkingMinutes = 20)
             repository.saveTrip(trip)
             repository.saveEvent(ItineraryEventEntity(tripId = trip.id, title = "Marco Zero", type = ItineraryType.ACTIVITY, startsAt = trip.startDate + 36_000_000, location = "Recife Antigo"))
             repository.saveChecklist(ChecklistItemEntity(tripId = trip.id, name = "Separar protetor solar"))
@@ -37,6 +37,9 @@ class AndroidSyncContractTest {
             assertEquals("Marco Zero", document.itinerary.single().title)
             assertEquals("Separar protetor solar", document.checklist.single().name)
             assertEquals(80_000, document.budgets.single().limitMinor)
+            assertEquals("São Paulo", document.trip.origin)
+            assertEquals("praias, cultura", document.trip.interests)
+            assertEquals(20, document.trip.maxWalkingMinutes)
         } finally { database.close() }
     }
 }

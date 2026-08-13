@@ -40,6 +40,7 @@ data class AiChecklistSuggestion(val id: String, val action: String, val targetI
 data class AiBudgetSuggestion(val id: String, val action: String, val changes: List<AiFieldChange>, val category: String, val percent: Int, val reason: String)
 data class AiSource(val title: String, val url: String, val checkedAt: String)
 data class AiTravelProposal(val id: String, val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String) { val selectableIds get() = (itinerary.map { it.id to it.action } + checklist.map { it.id to it.action } + budgets.map { it.id to it.action }).filter { it.second !in setOf("SKIP_DUPLICATE", "SKIP_UNCHANGED") }.map { it.first }.toSet() }
+data class TravelProfileInput(val origin: String, val flexibleDates: Boolean, val children: Int, val childAges: String, val interests: String, val avoid: String, val pace: String, val preferredStartHour: Int, val restMinutes: Int, val foodPreferences: String, val dietaryRestrictions: String, val preferredTransport: String, val maxWalkingMinutes: Int, val mobilityNeeds: String)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val repository: TripRepository) : ViewModel() {
@@ -155,6 +156,10 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
     }
     fun toggleAiItem(id: String) { selectedAiItemIds = if (id in selectedAiItemIds) selectedAiItemIds - id else selectedAiItemIds + id }
     fun selectAllAiItems(selected: Boolean) { selectedAiItemIds = if (selected) aiProposal?.selectableIds.orEmpty() else emptySet() }
+    fun saveTravelProfile(profile: TravelProfileInput) = viewModelScope.launch {
+        val trip = uiState.value.activeTrip ?: return@launch
+        repository.saveTrip(trip.copy(origin = profile.origin.trim(), flexibleDates = profile.flexibleDates, children = profile.children.coerceAtLeast(0), childAges = profile.childAges.trim(), interests = profile.interests.trim(), avoidPreferences = profile.avoid.trim(), pace = profile.pace, preferredStartHour = profile.preferredStartHour.coerceIn(5, 14), restMinutes = profile.restMinutes.coerceIn(0, 240), foodPreferences = profile.foodPreferences.trim(), dietaryRestrictions = profile.dietaryRestrictions.trim(), preferredTransport = profile.preferredTransport.trim(), maxWalkingMinutes = profile.maxWalkingMinutes.coerceIn(5, 240), mobilityNeeds = profile.mobilityNeeds.trim(), updatedAt = System.currentTimeMillis()))
+    }
     fun addItinerary(title: String, location: String, date: LocalDate, time: java.time.LocalTime, type: ItineraryType) = viewModelScope.launch {
         val tripId = uiState.value.activeTrip?.id ?: return@launch
         val startsAt = date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

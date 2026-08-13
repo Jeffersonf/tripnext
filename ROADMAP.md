@@ -203,13 +203,13 @@ Objetivo: a IA deve propor mudanças e gravá-las somente após revisão do usu�
 ### Perfil da viagem
 
 - [ ] Origem, destinos e múltiplas cidades.
-- [ ] Adultos, crianças, idades e necessidades de mobilidade.
-- [ ] Interesses e coisas a evitar.
-- [ ] Ritmo leve, equilibrado ou intenso.
-- [ ] Preferência de horários e tempo de descanso.
-- [ ] Estilo de alimentação e restrições.
-- [ ] Orçamento e categorias prioritárias.
-- [ ] Transporte preferido e limite de caminhada.
+- [x] Adultos/viajantes, crianças, idades e necessidades de mobilidade.
+- [x] Interesses e coisas a evitar.
+- [x] Ritmo leve, equilibrado ou intenso.
+- [x] Preferência de horários e tempo de descanso.
+- [x] Estilo de alimentação e restrições.
+- [x] Orçamento e categorias prioritárias.
+- [x] Transporte preferido e limite de caminhada.
 
 ### Capacidades
 
@@ -515,11 +515,13 @@ Ordem exata de implementação:
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — seleção individual de roteiro, checklist e orçamento; IDs estáveis tornam a importação local idempotente |
 | 2026-08-13 | `server: npm test` | **PASS** — 13 testes ativos; diff determinístico cobre adicionar, alterar, mover, remover, duplicatas e orçamento por categoria |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Android mostra antes/depois e aplica update/move/remove pelo mesmo snapshot offline; orçamento previsto incluído no sync |
+| 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — Room v9, migração 8→9, perfil detalhado sincronizado e APK gerado |
+| 2026-08-13 | `server: npm test` | **PASS** — 13 testes ativos; contexto do Copiloto inclui o perfil por viagem sem alterar o contrato seguro |
 
 ## Próximo incremento executável
 
-1. Adicionar perfil de planejamento: origem, datas flexíveis, viajantes, ritmo, interesses, restrições, mobilidade e orçamento previsto.
-2. Levar o copiloto revisável também ao site e sincronizar apenas os itens confirmados.
+1. Levar o perfil e o copiloto revisável ao site, sincronizando apenas os itens confirmados.
+2. Modelar destinos múltiplos/cidades por trecho, em vez de texto livre no destino.
 3. Adicionar expiração visível, descarte de proposta e retomada das propostas pendentes no Android e web.
 4. Implementar replanejamento de lacunas ou dias selecionados sem regenerar a viagem inteira.
 5. Rodar o contrato Android↔API em aparelho físico e validar a mesma viagem criada no site, editada offline no celular e recuperada novamente no site.

@@ -6,7 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, OptionPriceObservationEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 8, exportSchema = true)
+@Database(entities = [TripEntity::class, ExpenseEntity::class, CategoryBudgetEntity::class, SavingsGoalEntity::class, ItineraryEventEntity::class, TripIdeaEntity::class, TripOptionEntity::class, OptionPriceObservationEntity::class, InstallmentReservationEntity::class, ChecklistItemEntity::class, TripVehicleEntity::class, TripParticipantEntity::class, PendingOperationEntity::class], version = 9, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class TripNextDatabase : RoomDatabase() {
     abstract fun tripDao(): TripDao
@@ -94,6 +94,24 @@ abstract class TripNextDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE pending_operations ADD COLUMN baseVersion INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE pending_operations ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("DELETE FROM pending_operations WHERE tripId = ''")
+            }
+        }
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trips ADD COLUMN origin TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN flexibleDates INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE trips ADD COLUMN children INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE trips ADD COLUMN childAges TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN interests TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN avoidPreferences TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN pace TEXT NOT NULL DEFAULT 'BALANCED'")
+                db.execSQL("ALTER TABLE trips ADD COLUMN preferredStartHour INTEGER NOT NULL DEFAULT 9")
+                db.execSQL("ALTER TABLE trips ADD COLUMN restMinutes INTEGER NOT NULL DEFAULT 60")
+                db.execSQL("ALTER TABLE trips ADD COLUMN foodPreferences TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN dietaryRestrictions TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN preferredTransport TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE trips ADD COLUMN maxWalkingMinutes INTEGER NOT NULL DEFAULT 30")
+                db.execSQL("ALTER TABLE trips ADD COLUMN mobilityNeeds TEXT NOT NULL DEFAULT ''")
             }
         }
     }

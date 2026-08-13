@@ -56,6 +56,16 @@ class TripNextMigrationTest {
         }
     }
 
+    @Test
+    fun migration8To9PreservesTripAndAddsPlanningProfileDefaults() {
+        helper.createDatabase("$databaseName-v9", 8).apply { insertTrip(); close() }
+        helper.runMigrationsAndValidate("$databaseName-v9", 9, true, TripNextDatabase.MIGRATION_8_9).use { db ->
+            db.query("SELECT name, origin, flexibleDates, pace, preferredStartHour, restMinutes, maxWalkingMinutes FROM trips WHERE id='trip-1'").use { cursor ->
+                cursor.moveToFirst(); assertEquals("Rio", cursor.getString(0)); assertEquals("", cursor.getString(1)); assertEquals(0, cursor.getInt(2)); assertEquals("BALANCED", cursor.getString(3)); assertEquals(9, cursor.getInt(4)); assertEquals(60, cursor.getInt(5)); assertEquals(30, cursor.getInt(6))
+            }
+        }
+    }
+
     private fun SupportSQLiteDatabase.insertTrip() = execSQL(
         "INSERT INTO trips (id,name,destination,startDate,endDate,totalBudgetMinor,currency,isActive,archived,travelers,updatedAt,contingencyPercent) VALUES ('trip-1','Rio','Rio',1,2,200000,'BRL',1,0,2,1,10)"
     )

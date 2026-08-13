@@ -11,8 +11,9 @@ test("normalizes untrusted model output into bounded planning data", () => {
 test("keeps the Gemini key in the server request header", async () => {
   let captured;
   const planner = createGeminiPlanner({ apiKey: "server-only-secret", fetchImpl: async (url, options) => { captured = { url, options }; return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ overview: "Plano", itinerary: [], checklist: [], budgets: [], sources: [] }) }] } }] }) }; } });
-  const result = await planner({ id: "trip-1", name: "Recife" });
+  const result = await planner({ id: "trip-1", name: "Recife", planningProfile: { origin: "São Paulo", pace: "LIGHT", dietaryRestrictions: "sem lactose" } });
   assert.equal(result.overview, "Plano"); assert.equal(captured.options.headers["x-goog-api-key"], "server-only-secret"); assert.equal(captured.options.body.includes("server-only-secret"), false); assert.match(captured.url, /generateContent$/);
+  assert.equal(captured.options.body.includes("sem lactose"), true);
 });
 
 test("diff marks existing itinerary and checklist items as non-selectable duplicates", () => {

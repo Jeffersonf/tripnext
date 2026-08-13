@@ -25,7 +25,21 @@ data class TripEntity(
     val archived: Boolean = false,
     val travelers: Int = 1,
     val updatedAt: Long = System.currentTimeMillis(),
-    val contingencyPercent: Int = 0
+    val contingencyPercent: Int = 0,
+    val origin: String = "",
+    val flexibleDates: Boolean = false,
+    val children: Int = 0,
+    val childAges: String = "",
+    val interests: String = "",
+    val avoidPreferences: String = "",
+    val pace: String = "BALANCED",
+    val preferredStartHour: Int = 9,
+    val restMinutes: Int = 60,
+    val foodPreferences: String = "",
+    val dietaryRestrictions: String = "",
+    val preferredTransport: String = "",
+    val maxWalkingMinutes: Int = 30,
+    val mobilityNeeds: String = ""
 )
 
 @Entity(tableName = "expenses", indices = [Index("tripId")])
