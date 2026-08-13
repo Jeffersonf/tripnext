@@ -14,8 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -36,10 +34,11 @@ data class AppUiState(
     val remainingMinor get() = (activeTrip?.totalBudgetMinor ?: 0) - spentMinor
 }
 
-data class AiItinerarySuggestion(val dayOffset: Int, val time: String, val title: String, val location: String, val type: String)
-data class AiChecklistSuggestion(val name: String, val category: String)
-data class AiBudgetSuggestion(val category: String, val percent: Int)
-data class AiTravelProposal(val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<String>, val liveSearch: Boolean)
+data class AiItinerarySuggestion(val dayOffset: Int, val time: String, val title: String, val location: String, val type: String, val estimatedCostMinor: Long, val sourceUrl: String, val reason: String)
+data class AiChecklistSuggestion(val name: String, val category: String, val reason: String)
+data class AiBudgetSuggestion(val category: String, val percent: Int, val reason: String)
+data class AiSource(val title: String, val url: String, val checkedAt: String)
+data class AiTravelProposal(val overview: String, val itinerary: List<AiItinerarySuggestion>, val checklist: List<AiChecklistSuggestion>, val budgets: List<AiBudgetSuggestion>, val sources: List<AiSource>, val generatedAt: String)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val repository: TripRepository) : ViewModel() {
@@ -115,12 +114,12 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
             .onSuccess { syncConflicts = emptyList(); syncStatus = if (keepLocal) "Seu plano foi mantido; sincronize novamente" else "Plano do servidor restaurado" }
             .onFailure { sessionError = it.message; syncStatus = "NÃ£o foi possÃ­vel resolver o conflito" }
     }
-    fun generateAiPlan(apiKey: String) = viewModelScope.launch {
+    fun generateAiPlan() = viewModelScope.launch {
         val trip = uiState.value.activeTrip ?: return@launch
         aiLoading = true; aiError = null
-        runCatching { withContext(Dispatchers.IO) { requestGeminiPlan(apiKey, trip, uiState.value) } }
+        runCatching { withContext(Dispatchers.IO) { parseAiProposal(repository.requestAiPlan(trip.id)) } }
             .onSuccess { aiProposal = it; aiPlan = it.overview }
-            .onFailure { aiError = when { it.message?.contains("401") == true || it.message?.contains("403") == true -> "Chave Gemini inválida ou sem permissão."; else -> it.message ?: "Não foi possível consultar o Gemini." } }
+            .onFailure { aiError = if (repository.currentSession() == null) "Entre na sua conta para usar o copiloto." else it.message ?: "Não foi possível consultar o copiloto." }
         aiLoading = false
     }
     fun importAiProposal() = viewModelScope.launch {
@@ -132,7 +131,7 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
             val parsedTime = runCatching { java.time.LocalTime.parse(suggestion.time) }.getOrDefault(java.time.LocalTime.of(9, 0))
             val instant = start.plusDays(suggestion.dayOffset.coerceAtLeast(0).toLong()).atTime(parsedTime).atZone(zone).toInstant().toEpochMilli()
             val type = runCatching { ItineraryType.valueOf(suggestion.type.uppercase()) }.getOrDefault(ItineraryType.ACTIVITY)
-            repository.saveEvent(ItineraryEventEntity(tripId = trip.id, title = suggestion.title, type = type, startsAt = instant, location = suggestion.location, notes = "Sugestão importada do Copiloto"))
+            repository.saveEvent(ItineraryEventEntity(tripId = trip.id, title = suggestion.title, type = type, startsAt = instant, location = suggestion.location, notes = suggestion.reason, estimatedCostMinor = suggestion.estimatedCostMinor, sourceUrl = suggestion.sourceUrl, quoteDate = System.currentTimeMillis()))
         }
         proposal.checklist.forEach { suggestion ->
             val category = runCatching { ChecklistCategory.valueOf(suggestion.category.uppercase()) }.getOrDefault(ChecklistCategory.OTHER)
@@ -222,43 +221,14 @@ class AppViewModel(private val repository: TripRepository) : ViewModel() {
         selectedTripId.value = trip.id
     }
 
-    private fun requestGeminiPlan(apiKey: String, trip: TripEntity, state: AppUiState): AiTravelProposal {
-        require(apiKey.isNotBlank()) { "Configure sua chave Gemini em Ajustes." }
-        val prompt = """Você é um planejador de viagens. Pesquise informações atuais e crie um plano importável em português do Brasil para ${trip.name}, destino ${trip.destination}, de ${dateForAi(trip.startDate)} a ${dateForAi(trip.endDate)}, orçamento ${trip.totalBudgetMinor / 100.0} BRL. Já existem ${state.itinerary.size} eventos e ${state.checklist.size} tarefas. Retorne SOMENTE JSON válido: {"overview":"resumo com prioridades e estimativas de valores","itinerary":[{"dayOffset":0,"time":"09:00","title":"nome","location":"endereço/bairro","type":"FLIGHT|CHECK_IN|CHECK_OUT|ACTIVITY|RESTAURANT|TRANSFER|OTHER"}],"checklist":[{"name":"tarefa","category":"DOCUMENTS|CLOTHES|ELECTRONICS|HYGIENE|MEDICINES|OTHER"}],"budgets":[{"category":"ACCOMMODATION|TRANSPORT|FOOD|ACTIVITIES|INSURANCE|GIFTS|DOCUMENTS|UNEXPECTED","percent":30}],"sources":["nome ou URL"]}. Use no máximo 12 eventos e 12 tarefas. A soma dos percentuais deve ser 100."""
-        val body = JSONObject().apply {
-            put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", prompt)))))
-            put("tools", org.json.JSONArray().put(JSONObject().put("google_search", JSONObject())))
-            put("generationConfig", JSONObject().put("maxOutputTokens", 4096).put("responseMimeType", "application/json"))
-        }
-        var (code, response) = sendGemini(apiKey, body)
-        val fellBack = code == 429
-        if (fellBack) { body.remove("tools"); val retry = sendGemini(apiKey, body); code = retry.first; response = retry.second }
-        if (code !in 200..299) error("Gemini HTTP $code: ${response.take(180)}")
-        val json = JSONObject(response)
-        val parts = json.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
-        val text = (0 until parts.length()).mapNotNull { parts.getJSONObject(it).optString("text").takeIf(String::isNotBlank) }.joinToString("\n").trim().removePrefix("```json").removeSuffix("```").trim()
-        val proposal = JSONObject(text)
+    private fun parseAiProposal(proposal: JSONObject): AiTravelProposal {
         fun array(name: String) = proposal.optJSONArray(name) ?: org.json.JSONArray()
-        val itinerary = array("itinerary").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiItinerarySuggestion(it.optInt("dayOffset"), it.optString("time", "09:00"), it.optString("title"), it.optString("location"), it.optString("type", "ACTIVITY")) }.filter { it.title.isNotBlank() } }
-        val checklist = array("checklist").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiChecklistSuggestion(it.optString("name"), it.optString("category", "OTHER")) }.filter { it.name.isNotBlank() } }
-        val budgets = array("budgets").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiBudgetSuggestion(it.optString("category"), it.optInt("percent")) } }
-        val sources = array("sources").let { values -> (0 until values.length()).map { values.optString(it) }.filter { it.isNotBlank() } }
-        val warning = if (fellBack) "Plano gerado sem pesquisa ao vivo porque a cota de busca está indisponível.\n\n" else ""
-        return AiTravelProposal(warning + proposal.optString("overview"), itinerary, checklist, budgets, sources, !fellBack)
+        val itinerary = array("itinerary").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiItinerarySuggestion(it.optInt("dayOffset"), it.optString("time", "09:00"), it.optString("title"), it.optString("location"), it.optString("type", "ACTIVITY"), it.optLong("estimatedCostMinor"), it.optString("sourceUrl"), it.optString("reason")) }.filter { it.title.isNotBlank() } }
+        val checklist = array("checklist").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiChecklistSuggestion(it.optString("name"), it.optString("category", "OTHER"), it.optString("reason")) }.filter { it.name.isNotBlank() } }
+        val budgets = array("budgets").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiBudgetSuggestion(it.optString("category"), it.optInt("percent"), it.optString("reason")) } }
+        val sources = array("sources").let { values -> (0 until values.length()).map { values.getJSONObject(it) }.map { AiSource(it.optString("title"), it.optString("url"), it.optString("checkedAt")) }.filter { it.url.isNotBlank() } }
+        return AiTravelProposal(proposal.optString("overview"), itinerary, checklist, budgets, sources, proposal.optString("generatedAt"))
     }
-
-    private fun sendGemini(apiKey: String, body: JSONObject): Pair<Int, String> {
-        val connection = (URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 20_000; readTimeout = 60_000; doOutput = true
-            setRequestProperty("Content-Type", "application/json"); setRequestProperty("x-goog-api-key", apiKey)
-        }
-        connection.outputStream.use { it.write(body.toString().toByteArray()) }
-        val code = connection.responseCode
-        val response = (if (code in 200..299) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
-        return code to response
-    }
-
-    private fun dateForAi(epoch: Long) = java.time.Instant.ofEpochMilli(epoch).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
     class Factory(private val repository: TripRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = AppViewModel(repository) as T

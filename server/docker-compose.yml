@@ -19,6 +19,8 @@ services:
       DATABASE_URL: postgres://tripnext:tripnext@postgres:5432/tripnext
       AUTH_SECRET: local-only-change-before-production-123456789
       APP_ORIGINS: http://localhost:5173
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     ports: ["8787:8787"]
     depends_on:
       postgres: { condition: service_healthy }

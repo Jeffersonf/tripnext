@@ -91,6 +91,26 @@ paths:
         - { name: tripId, in: query, schema: { type: string, maxLength: 200 } }
       responses:
         "200": { description: Mudanças ordenadas e novo cursor }
+  /api/ai/plan:
+    post:
+      operationId: createAiPlanProposal
+      description: Gera uma proposta revisável; nunca altera a viagem automaticamente.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tripId, context]
+              properties:
+                tripId: { type: string, maxLength: 200 }
+                context: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Proposta estruturada com roteiro, checklist, orçamento e fontes }
+        "404": { description: Viagem não encontrada ou inacessível }
+        "502": { description: Provedor de IA indisponível }
+        "503": { description: IA não configurada no servidor }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

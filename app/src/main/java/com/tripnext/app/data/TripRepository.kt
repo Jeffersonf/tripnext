@@ -47,6 +47,7 @@ class TripRepository(
     fun currentSession() = remote.session()
     suspend fun register(apiUrl: String, name: String, email: String, password: String) = remote.register(apiUrl, name, email, password)
     suspend fun login(apiUrl: String, email: String, password: String) = remote.login(apiUrl, email, password)
+    suspend fun requestAiPlan(tripId: String) = document(tripId)?.let { remote.plan(tripId, TripDocumentCodec.encode(it)) } ?: error("Viagem não encontrada.")
     fun logout() = remote.logout()
     private suspend fun document(tripId: String): TripDocument? = dao.tripNow(tripId)?.let { TripDocument(it, dao.itineraryNow(tripId), dao.ideasNow(tripId), dao.optionsNow(tripId), dao.checklistNow(tripId), dao.participantsNow(tripId)) }
     private suspend fun enqueueSnapshot(tripId: String) {

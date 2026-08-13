@@ -22,6 +22,7 @@ interface TripRemoteRepository {
     suspend fun ensureTrip(operation: PendingOperationEntity)
     suspend fun push(operations: List<PendingOperationEntity>): List<PushResult>
     suspend fun pull(cursor: Long): PullResult
+    suspend fun plan(tripId: String, context: JSONObject): JSONObject
 }
 
 class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteRepository {
@@ -56,6 +57,10 @@ class HttpTripRemoteRepository(private val sessions: SessionStore) : TripRemoteR
         val result = request(session.apiUrl + "/api/sync/pull?cursor=$cursor", "GET", null, session.token)
         val changes = result.getJSONArray("changes")
         return PullResult(result.getLong("cursor"), (0 until changes.length()).map { index -> val item = changes.getJSONObject(index); RemoteChange(item.getLong("sequence"), item.getString("tripId"), item.getString("entityType"), item.getLong("version"), item.optBoolean("deleted"), item.optJSONObject("payload")) })
+    }
+    override suspend fun plan(tripId: String, context: JSONObject): JSONObject {
+        val session = requireSession()
+        return request(session.apiUrl + "/api/ai/plan", "POST", JSONObject().put("tripId", tripId).put("context", context), session.token).getJSONObject("proposal")
     }
     private fun requireSession() = sessions.load() ?: error("Entre na sua conta para sincronizar.")
     private fun request(url: String, method: String, body: JSONObject?, token: String?) = requestRaw(url, method, body, token).let { if (it.first !in 200..299) errorFrom(it); JSONObject(it.second) }

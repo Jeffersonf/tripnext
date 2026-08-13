@@ -7,7 +7,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const publicUser = (user) => ({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt });
 const badRequest = (response, details) => response.status(400).json({ error: "validation_error", details });
 
-export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowedOrigins = [] }) {
+export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowedOrigins = [], aiPlanner = null }) {
   if (!authSecret || authSecret.length < 32) throw new Error("AUTH_SECRET must contain at least 32 characters");
   const app = express();
   app.disable("x-powered-by");
@@ -76,6 +76,15 @@ export function createApp({ store, authSecret, tokenTtlSeconds = 604800, allowed
       if (tripId && tripId.length > 200) return badRequest(response, "tripId is too long");
       response.json(await store.pull(request.auth.sub, cursor, tripId));
     } catch (error) { next(error); }
+  });
+  app.post("/api/ai/plan", authenticate, async (request, response, next) => {
+    try {
+      if (!aiPlanner) return response.status(503).json({ error: "ai_unavailable" });
+      const tripId = String(request.body?.tripId || ""), context = request.body?.context;
+      if (!tripId || tripId.length > 200 || !context || typeof context !== "object" || context.id !== tripId || JSON.stringify(context).length > 100000) return badRequest(response, "tripId and matching context (up to 100 KB) are required");
+      if (!await store.tripRole(request.auth.sub, tripId)) return response.status(404).json({ error: "trip_not_found" });
+      response.json({ proposal: await aiPlanner(context) });
+    } catch (error) { if (error.code === "ai_provider_error" || error.name === "AbortError") return response.status(502).json({ error: "ai_provider_error" }); next(error); }
   });
 
   app.use((_request, response) => response.status(404).json({ error: "not_found" }));

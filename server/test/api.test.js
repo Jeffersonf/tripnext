@@ -59,3 +59,17 @@ test("pull returns ordered changes and preserves tombstones", async () => {
   const pulled = await request(`/api/sync/pull?cursor=0&tripId=${tripId}`, { token: user.body.token });
   assert.deepEqual(pulled.body.changes.slice(-2).map((change) => change.deleted), [false, true]); assert.ok(pulled.body.cursor > 0);
 });
+
+test("AI planning requires authentication, trip access and returns a proposal", async () => {
+  const aiCalls = [];
+  const aiServer = createApp({ store, authSecret: secret, aiPlanner: async context => { aiCalls.push(context); return { overview: "Plano revisável", itinerary: [], checklist: [], budgets: [], sources: [], generatedAt: "2026-08-13T00:00:00.000Z" }; } }).listen(0);
+  await new Promise(resolve => aiServer.once("listening", resolve));
+  const aiUrl = `http://127.0.0.1:${aiServer.address().port}`;
+  const user = await register("planner@example.com"), { id: tripId } = await createTrip(user.body.token);
+  const call = async (token, body) => { const response = await fetch(`${aiUrl}/api/ai/plan`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) }); return { status: response.status, body: await response.json() }; };
+  assert.equal((await call(null, { tripId, context: { id: tripId } })).status, 401);
+  assert.equal((await call(user.body.token, { tripId: "missing", context: { id: "missing" } })).status, 404);
+  const result = await call(user.body.token, { tripId, context: { id: tripId, name: "Rio" } });
+  assert.equal(result.status, 200); assert.equal(result.body.proposal.overview, "Plano revisável"); assert.equal(aiCalls.length, 1);
+  await new Promise(resolve => aiServer.close(resolve));
+});
