@@ -511,7 +511,7 @@ Ordem exata de implementação:
 | 2026-08-13 | `server: npm test` | **PASS** — 10 testes ativos; endpoint de IA autenticado, autorização por viagem, normalização e segredo somente no header do servidor |
 | 2026-08-13 | `web: npm test && npm run build` | **PASS** — 17 testes e bundle de produção; nenhuma chamada ou chave Gemini no JavaScript |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — copiloto Android usa `/api/ai/plan`, mostra proposta antes de importar e remove credencial legada |
-| 2026-08-13 | `server: npm test` | **PASS** — proposta persistida, seleção validada/idempotente e diff de duplicatas; migration PostgreSQL 002 aguardando CI com banco real |
+| 2026-08-13 | GitHub Actions `31726456737` | **PASS** — migration PostgreSQL 002, persistência/seleção de propostas, 17 testes web, 4 E2E, build e publicação Pages |
 | 2026-08-13 | `gradlew compileDebugAndroidTestKotlin testDebugUnitTest assembleDebug` | **PASS** — seleção individual de roteiro, checklist e orçamento; IDs estáveis tornam a importação local idempotente |
 
 ## Próximo incremento executável
